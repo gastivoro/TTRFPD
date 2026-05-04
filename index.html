@@ -251,6 +251,10 @@
     <div class="ars-side" id="ars-side"></div>
   </div>
 
+  <!-- Distribución por vencimiento -->
+  <div class="sec">Distribución por Vencimiento — Títulos Públicos</div>
+  <div class="chart-box"><div id="chart-maturity" style="min-height:260px"></div></div>
+
   <!-- Balance -->
   <div class="sec">Estructura del Balance</div>
   <div class="cards cards-4" id="balance-cards"></div>
@@ -472,7 +476,7 @@ function renderARS(arsRows, nav) {
     yaxis: { gridcolor:C.border, showgrid:false, color:C.text, tickfont:{size:11}, automargin:true },
     showlegend: false,
     annotations:[{
-      text:`Total ARS: ${fmtMM(total)}  (${(total/nav*100).toFixed(1)}% del PN)`,
+      text:`Total ARS: ${fmtMM(total)}  (${arsRows.reduce((s,r)=>s+r.pct,0).toFixed(1)}% del PN)`,
       xref:'paper', yref:'paper', x:0, y:1.12, showarrow:false,
       font:{size:9, color:C.muted, family:'DM Mono'}, align:'left',
     }],
@@ -513,8 +517,9 @@ function buildBalance(inversiones, creditos, pasivos, nav) {
     </div>`).join('');
 }
 
-function buildARSSide(arsRows, nav) {
-  const total = arsRows.reduce((s,r) => s+r.monto, 0);
+function buildARSSide(arsRows) {
+  const total    = arsRows.reduce((s,r) => s+r.monto, 0);
+  const totalPct = arsRows.reduce((s,r) => s+r.pct,   0);
   let html = arsRows.map(r => {
     const col = ARS_COLOR[r.categoria] || C.blue;
     return `<div>
@@ -528,7 +533,7 @@ function buildARSSide(arsRows, nav) {
   html += `<div class="ars-total">
     <div class="ars-item-label">Total ARS</div>
     <div class="ars-item-row">
-      <div class="ars-item-pct" style="color:var(--gold);font-size:20px">${(total/nav*100).toFixed(2)}%</div>
+      <div class="ars-item-pct" style="color:var(--gold);font-size:20px">${totalPct.toFixed(2)}%</div>
     </div>
     <div class="ars-item-val">${fmtMM(total)}</div>
   </div>`;
@@ -560,6 +565,87 @@ function buildHoldings(holdings, nav) {
       <td class="hmonto">${fmtMM(r.monto)}</td>
     </tr>`;
   }).join('');
+}
+
+// ── Maturity parser + chart ───────────────────────────────
+const MCODE = { E:1, F:2, M:3, A:4, Y:5, J:6, L:7, G:8, S:9, O:10, N:11, D:12 };
+const MNAME = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function extractMaturity(ticker) {
+  let m;
+  // T30J6, S31G6, M31G6, T15E7, T30J7 → [1-char][2-digit-day][month][1-digit-year]
+  m = ticker.match(/^[A-Z](\d{2})([EFMAYLGSOND])(\d)$/);
+  if (m && MCODE[m[2]]) {
+    const day = parseInt(m[1]), mon = MCODE[m[2]], year = 2020 + parseInt(m[3]);
+    return {
+      sortKey: year * 100 + mon,
+      label:   `${MNAME[mon]} ${String(year).slice(2)}`,
+      dateStr: `${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}/${year}`,
+    };
+  }
+  // TTJ26, TTS26, TTD26, TMF27, TMG27, TMF28 → [2-3-char-prefix][month][2-digit-year]
+  m = ticker.match(/^[A-Z]{2,3}([EFMAYLGSOND])(\d{2})$/);
+  if (m && MCODE[m[1]]) {
+    const mon = MCODE[m[1]], year = 2000 + parseInt(m[2]);
+    return {
+      sortKey: year * 100 + mon,
+      label:   `${MNAME[mon]} ${String(year).slice(2)}`,
+      dateStr: `${MNAME[mon]} ${year}`,
+    };
+  }
+  return null;
+}
+
+function renderMaturity(holdings, nav) {
+  const items = holdings
+    .filter(r => r.isIndividual)
+    .map(r => {
+      const mat = extractMaturity(r.ticker);
+      if (!mat) return null;
+      return { ...mat, pct: r.monto / nav * 100, ticker: r.ticker, clasificacion: r.clasificacion };
+    })
+    .filter(Boolean);
+  if (items.length === 0) return;
+
+  // Sorted unique month labels
+  const monthMap = new Map();
+  items.forEach(it => monthMap.set(it.sortKey, it.label));
+  const labels = [...monthMap.entries()].sort((a,b)=>a[0]-b[0]).map(([,l])=>l);
+
+  // Group by (classification, month)
+  const byClass = {};
+  items.forEach(it => {
+    if (!byClass[it.clasificacion]) byClass[it.clasificacion] = {};
+    const g = byClass[it.clasificacion];
+    if (!g[it.label]) g[it.label] = { pct: 0, lines: [] };
+    g[it.label].pct += it.pct;
+    g[it.label].lines.push(`${it.ticker}  ·  vence ${it.dateStr}`);
+  });
+
+  const traces = Object.entries(byClass).map(([cls, byLabel]) => {
+    const ys = labels.map(l => byLabel[l]?.pct || 0);
+    return {
+      type: 'bar', name: cls,
+      x: labels, y: ys,
+      marker: { color: CAT_COLOR[cls] || C.gray, line: {width:0} },
+      text: ys.map(v => v > 1.5 ? `${v.toFixed(1)}%` : ''),
+      textposition: 'inside',
+      textfont: { size:9, color:'rgba(255,255,255,0.9)' },
+      customdata: labels.map(l => byLabel[l]?.lines.join('<br>') || ''),
+      hovertemplate: '<b>%{x}</b><br>%{customdata}<br><b>%{y:.1f}% del PN</b><extra></extra>',
+    };
+  });
+
+  Plotly.newPlot('chart-maturity', traces, {
+    ...LAYOUT_BASE,
+    height: 280,
+    barmode: 'stack',
+    bargap: 0.28,
+    xaxis: { gridcolor: C.border, color: C.text, tickfont:{size:10}, automargin:true },
+    yaxis: { gridcolor: C.border, ticksuffix:'%', showgrid:true, color:C.muted, automargin:true, rangemode:'tozero' },
+    showlegend: true,
+    legend: { orientation:'h', x:0, y:1.14, font:{size:8, color:C.muted}, traceorder:'normal' },
+  }, PLOTLY_CFG);
 }
 
 // ── Main data processor ───────────────────────────────────
@@ -597,7 +683,7 @@ function processWorkbook(wb, fname) {
   // Sections
   buildKPIs(nav, inversiones, creditos);
   buildBalance(inversiones, creditos, pasivos, nav);
-  buildARSSide(arsDetail, nav);
+  buildARSSide(arsDetail);
   buildHoldings(holdings, nav);
 
   // Charts (small delay so containers are laid out before Plotly measures them)
@@ -605,6 +691,7 @@ function processWorkbook(wb, fname) {
     renderAlloc(summary);
     renderFX(fx);
     renderARS(arsDetail, nav);
+    renderMaturity(holdings, nav);
   }, 80);
 
   // Show dashboard
