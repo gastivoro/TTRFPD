@@ -1,0 +1,24 @@
+# Excel data files — never commit
+*.xlsx
+*.xls
+*.csv
+
+# Python artifacts (replaced by index.html)
+app.py
+cafci_test.py
+verify.py
+requirements.txt
+run.bat
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp

@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toronto Trust Renta Fija Plus</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold:   #c9a84c;
+      --blue:   #4c7bc9;
+      --green:  #4cc97b;
+      --red:    #c94c4c;
+      --purple: #9b59b6;
+      --orange: #e67e22;
+      --gray:   #95a5a6;
+      --bg:     #0a0d14;
+      --surf:   #111520;
+      --border: #1e2538;
+      --text:   #e8eaf0;
+      --muted:  #6b7280;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh; padding: 24px 32px;
+    }
+    a { color: var(--gold); }
+
+    /* ── Upload screen ───────────────────────────────────── */
+    #upload-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 80vh; gap: 24px;
+    }
+    .upload-title {
+      font-family: 'DM Sans', sans-serif; font-size: 28px; font-weight: 600;
+      color: var(--text);
+    }
+    .upload-title span { color: var(--gold); }
+    .drop-zone {
+      width: 480px; border: 1px dashed var(--border); background: var(--surf);
+      border-radius: 4px; padding: 48px 32px; text-align: center;
+      cursor: pointer; transition: border-color .2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--gold); }
+    .drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+    .drop-label { font-size: 11px; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; }
+    .drop-sub   { font-size: 10px; color: var(--muted); margin-top: 6px; }
+    .upload-err { font-size: 10px; color: var(--red); }
+
+    /* ── Dashboard ───────────────────────────────────────── */
+    #dashboard { display: none; max-width: 1400px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 24px;
+    }
+    .header-title {
+      font-family: 'DM Sans', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -.5px;
+    }
+    .header-title span { color: var(--gold); }
+    .header-sub {
+      font-size: 10px; color: var(--muted); letter-spacing: .05em; margin: 4px 0 10px;
+    }
+    .tag {
+      display: inline-block; background: rgba(201,168,76,.12);
+      border: 1px solid rgba(201,168,76,.25); color: var(--gold);
+      font-size: 9px; padding: 2px 8px; letter-spacing: .12em;
+      text-transform: uppercase; margin-right: 6px;
+    }
+    .header-nav { text-align: right; }
+    .nav-val  { font-size: 24px; font-weight: 500; color: var(--gold); }
+    .nav-lbl  { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+    .nav-inv  { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+    /* Section divider */
+    .sec {
+      font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+      color: var(--muted); margin: 20px 0 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Cards */
+    .cards { display: grid; gap: 8px; }
+    .cards-7 { grid-template-columns: repeat(7, 1fr); }
+    .cards-4 { grid-template-columns: repeat(4, 1fr); }
+    .card {
+      background: var(--surf); border: 1px solid var(--border);
+      padding: 14px 16px; position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201,168,76,.4), transparent);
+    }
+    .card-title {
+      font-size: 8px; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .card-val  { font-size: 20px; font-weight: 500; line-height: 1; }
+    .card-sub  { font-size: 9px; color: var(--muted); margin-top: 4px; }
+    .c-gold   { color: var(--gold); }
+    .c-red    { color: var(--red); }
+    .c-green  { color: var(--green); }
+    .c-blue   { color: var(--blue); }
+    .c-empty  { color: var(--border); }
+
+    /* 2-col layout */
+    .row-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
+    .row-3-1 { display: grid; grid-template-columns: 3fr 1fr; gap: 16px; align-items: start; }
+
+    /* Plotly container */
+    .chart-box { background: var(--surf); border: 1px solid var(--border); padding: 4px; }
+    .chart-lbl {
+      font-size: 9px; color: var(--muted); letter-spacing: .15em;
+      text-transform: uppercase; padding: 10px 12px 0;
+    }
+
+    /* ARS sidebar */
+    .ars-side { display: flex; flex-direction: column; gap: 12px; padding: 16px 0; }
+    .ars-item-label { font-size: 8px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 2px; }
+    .ars-item-row   { display: flex; align-items: baseline; gap: 8px; }
+    .ars-item-pct   { font-size: 18px; font-weight: 500; font-family: 'DM Mono', monospace; }
+    .ars-item-val   { font-size: 9px; color: var(--muted); }
+    .ars-total      { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px; }
+
+    /* Holdings table */
+    .htable-wrap { overflow-x: auto; background: var(--surf); border: 1px solid var(--border); }
+    table.htable { width: 100%; border-collapse: collapse; font-size: 11px; }
+    table.htable th {
+      background: var(--surf); color: var(--muted); font-size: 8px;
+      letter-spacing: .18em; text-transform: uppercase; padding: 10px 14px;
+      text-align: left; border-bottom: 2px solid var(--border); white-space: nowrap;
+    }
+    table.htable td { padding: 8px 14px; border-bottom: 1px solid rgba(30,37,56,.8); vertical-align: middle; }
+    table.htable tr:hover td { background: rgba(201,168,76,.04); }
+    .hticker { font-weight: 500; color: var(--gold); letter-spacing: .04em; }
+    .hinstr  { color: var(--muted); font-size: 10px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .htipo   { font-size: 9px; background: rgba(255,255,255,.05); padding: 2px 6px; white-space: nowrap; }
+    .hbar-wrap { display: flex; align-items: center; gap: 7px; }
+    .hbar    { height: 3px; border-radius: 2px; opacity: .7; }
+    .hpct    { font-weight: 500; white-space: nowrap; }
+    .hmonto  { color: var(--muted); font-size: 10px; text-align: right; white-space: nowrap; }
+
+    /* Upload button (inside dashboard) */
+    .reload-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .15em;
+      text-transform: uppercase; padding: 6px 14px; cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .reload-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+    /* Footer */
+    .footer {
+      margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between;
+      font-size: 9px; color: var(--muted); letter-spacing: .05em;
+    }
+    .watermark {
+      position: fixed; bottom: 14px; right: 20px;
+      font-size: 9px; color: rgba(107,114,128,.2);
+      letter-spacing: .12em; pointer-events: none;
+    }
+
+    @media (max-width: 1100px) {
+      .cards-7 { grid-template-columns: repeat(4, 1fr); }
+      .row-2, .row-3-1 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      body { padding: 16px; }
+      .cards-7 { grid-template-columns: repeat(2, 1fr); }
+      .cards-4 { grid-template-columns: repeat(2, 1fr); }
+      .drop-zone { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Upload screen -->
+<div id="upload-screen">
+  <div>
+    <div class="upload-title">Toronto Trust <span>Renta Fija Plus</span></div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:.08em">
+      INFORME DE GESTIÓN · ADMINISTRADOR: CALDERON BELISARIO
+    </div>
+  </div>
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".xlsx,.xls">
+    <div class="drop-icon">📂</div>
+    <div class="drop-label">Subir Excel de cartera</div>
+    <div class="drop-sub">Detalle Cartera TTRFP al DD.MM.AAAA.xlsx</div>
+  </div>
+  <div class="upload-err" id="upload-err"></div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard">
+  <div class="watermark">ANÁLISIS INTERNO · CONFIDENCIAL</div>
+
+  <div class="header">
+    <div>
+      <div class="header-title">Toronto Trust <span>Renta Fija Plus</span></div>
+      <div class="header-sub" id="h-sub">INFORME DE GESTIÓN · — · ADMINISTRADOR: CALDERON BELISARIO</div>
+      <span class="tag">FCI Renta Fija</span>
+      <span class="tag">CNV Reg.</span>
+      <span class="tag">ARS</span>
+    </div>
+    <div class="header-nav">
+      <div class="nav-val" id="h-nav"></div>
+      <div class="nav-lbl">Patrimonio Neto</div>
+      <div class="nav-inv" id="h-inv"></div>
+      <div style="font-size:9px;color:var(--muted)">Inversiones</div>
+      <div style="margin-top:12px">
+        <button class="reload-btn" onclick="resetDashboard()">↑ Cargar nuevo archivo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="sec">Métricas Clave</div>
+  <div class="cards cards-7" id="kpi-row"></div>
+
+  <!-- Composición del Portafolio -->
+  <div class="sec">Composición del Portafolio</div>
+  <div class="row-2">
+    <div>
+      <div class="chart-lbl">Asignación por Tipo · Monto (Bn ARS) y % PN</div>
+      <div class="chart-box"><div id="chart-alloc" style="height:360px"></div></div>
+    </div>
+    <div>
+      <div class="chart-lbl">Exposición por Moneda (% Inversiones)</div>
+      <div class="chart-box"><div id="chart-fx" style="height:300px"></div></div>
+    </div>
+  </div>
+
+  <!-- Exposición en Pesos -->
+  <div class="sec">Exposición en Pesos</div>
+  <div class="row-3-1">
+    <div>
+      <div class="chart-box"><div id="chart-ars" style="height:240px"></div></div>
+    </div>
+    <div class="ars-side" id="ars-side"></div>
+  </div>
+
+  <!-- Balance -->
+  <div class="sec">Estructura del Balance</div>
+  <div class="cards cards-4" id="balance-cards"></div>
+
+  <!-- Holdings -->
+  <div class="sec">Holdings — Títulos Individuales</div>
+  <div class="htable-wrap">
+    <table class="htable">
+      <thead>
+        <tr>
+          <th>Ticker</th><th>Instrumento</th><th>Tipo</th>
+          <th style="text-align:right">Precio</th>
+          <th>% PN</th>
+          <th style="text-align:right">Monto</th>
+        </tr>
+      </thead>
+      <tbody id="holdings-body"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>Toronto Trust Administradora de Activos S.A. · Fondo Renta Fija Plus · CNV</span>
+    <span id="footer-fname"></span>
+  </div>
+</div>
+
+<script>
+// ── Palette ──────────────────────────────────────────────
+const C = {
+  gold:'#c9a84c', blue:'#4c7bc9', green:'#4cc97b', red:'#c94c4c',
+  purple:'#9b59b6', orange:'#e67e22', gray:'#95a5a6',
+  bg:'#0a0d14', surf:'#111520', border:'#1e2538', text:'#e8eaf0', muted:'#6b7280',
+};
+const CAT_COLOR = {
+  'MM + Pase': C.gray, 'Sintetico DL (DL - Rofex)': C.purple,
+  'LECAP': C.gold, 'BONCAP': '#d4ac0d', 'BONCER': C.green, 'BONTAM': C.orange,
+  'BOPREAL': '#aaa', 'DL Soberano': C.blue, 'HD - Global': C.red,
+  'DL - Corporativo': '#5dade2', 'HD - Corporativo': '#e06c6c',
+  'HD - Bonar': '#c0392b', 'Treasuries': '#7f8c8d',
+};
+const ARS_COLOR = {
+  'Tasa Fija ARS': C.gold, 'Tasa Variable ARS ( BONTAM)': C.orange,
+  'CER': C.green, 'Money Market + Pagares ARS': C.gray,
+};
+const USD_L_CATS = new Set(['DL Soberano','DL - Corporativo']);
+const HARD_CATS  = new Set(['HD - Global','HD - Corporativo','HD - Bonar','BOPREAL','Treasuries']);
+
+// ── Number parsing ────────────────────────────────────────
+function parseNum(val) {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  let s = String(val).trim().replace(/\xa0/g,'').replace(/%/g,'');
+  s = s.replace(/[^\d,.\-]/g,'');
+  if (!s || s === '-' || s === '.' || s === ',') return 0;
+  if (s.includes(',')) {
+    s = s.replace(/\./g,'').replace(',','.');
+  } else {
+    s = s.replace(/\./g,'');
+  }
+  return parseFloat(s) || 0;
+}
+
+function fmtMM(v) {
+  const abs = Math.abs(v);
+  if (abs >= 1e12) return `$ ${(v/1e12).toLocaleString('es-AR',{minimumFractionDigits:3,maximumFractionDigits:3})} Bn`;
+  return `$ ${(v/1e6).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0})} MM`;
+}
+
+function extractDate(fname) {
+  const m = fname.match(/(\d{2})[.\-](\d{2})[.\-]?(\d{2,4})?/);
+  if (!m) return '';
+  const [,d,mo,y='2026'] = m;
+  return `${d}/${mo}/${y.length===2?'20'+y:y}`;
+}
+
+// ── Excel parsing ─────────────────────────────────────────
+function parseHoldings(data) {
+  // rows 1-34 (0-indexed), cols 0-5
+  const rows = [];
+  for (let r = 1; r <= 34; r++) {
+    const row = data[r] || [];
+    const instrumento  = String(row[0]||'').trim();
+    const vn           = parseNum(row[1]);
+    const precio       = parseNum(row[2]);
+    const monto        = parseNum(row[3]);
+    const clasificacion= String(row[4]||'').trim();
+    const ticker       = String(row[5]||'').trim();
+    if (Math.abs(monto) < 1) continue;
+    const isIndividual = ticker && !ticker.startsWith('#') && ticker.length >= 3;
+    rows.push({ instrumento, vn, precio, monto, clasificacion, ticker, isIndividual });
+  }
+  return rows;
+}
+
+function parseSummary(data) {
+  // rows 1-14, cols 9-12
+  const rows = [];
+  for (let r = 1; r <= 14; r++) {
+    const row = data[r] || [];
+    const categoria = String(row[9]||'').trim();
+    const monto     = parseNum(row[10]);
+    let   pct       = parseNum(row[11]);
+    if (!categoria || categoria.toLowerCase() === 'total') continue;
+    if (Math.abs(monto) < 1) continue;
+    rows.push({ categoria, monto, pct });
+  }
+  // scale pct if decimal
+  const maxPct = Math.max(...rows.map(r => Math.abs(r.pct)));
+  if (maxPct < 2) rows.forEach(r => r.pct *= 100);
+  return rows;
+}
+
+function parseArsBreakdown(data) {
+  // rows 19-23, cols 14-16
+  const rows = [];
+  for (let r = 19; r <= 23; r++) {
+    const row = data[r] || [];
+    const categoria = String(row[14]||'').trim();
+    const monto     = parseNum(row[15]);
+    let   pct       = parseNum(row[16]);
+    if (!categoria || categoria.toLowerCase().startsWith('total')) continue;
+    if (Math.abs(monto) < 1) continue;
+    rows.push({ categoria, monto, pct });
+  }
+  const maxPct = Math.max(...rows.map(r => Math.abs(r.pct)));
+  if (maxPct < 2) rows.forEach(r => r.pct *= 100);
+  return rows;
+}
+
+function parseBalance(data) {
+  const result = { inversiones:0, creditos:0, pasivos:0, nav:0 };
+  for (let r = 17; r <= 23; r++) {
+    const row = data[r] || [];
+    const label = String(row[9]||'').trim().toLowerCase();
+    const val   = parseNum(row[10]);
+    if (label.includes('inversi')) result.inversiones = val;
+    else if (label.includes('cr') && label.includes('dit')) result.creditos = val;
+    else if (label.includes('pasiv')) result.pasivos = val;
+    else if (label.includes('patrimonial')) result.nav = val;
+  }
+  return result;
+}
+
+// ── Plotly config ─────────────────────────────────────────
+const LAYOUT_BASE = {
+  paper_bgcolor: C.bg, plot_bgcolor: C.bg,
+  font: { family:'DM Mono, monospace', color: C.muted, size: 10 },
+  margin: { l:8, r:8, t:24, b:8 },
+};
+const PLOTLY_CFG = { displayModeBar: false, responsive: true };
+
+// ── Chart renderers ───────────────────────────────────────
+function renderAlloc(summary) {
+  const sorted = [...summary].sort((a,b) => a.monto - b.monto);
+  Plotly.newPlot('chart-alloc', [{
+    type: 'bar', orientation: 'h',
+    x: sorted.map(r => r.monto/1e9),
+    y: sorted.map(r => r.categoria),
+    marker: { color: sorted.map(r => CAT_COLOR[r.categoria]||C.gray), line:{width:0} },
+    text: sorted.map(r => `${r.pct.toFixed(1)}%`),
+    textposition: 'outside',
+    textfont: { size:10, color: C.text },
+    customdata: sorted.map(r => [r.monto, r.pct]),
+    hovertemplate: '%{y}: $ %{customdata[0]:,.0f}  (%{customdata[1]:.2f}%)<extra></extra>',
+  }], {
+    ...LAYOUT_BASE,
+    height: Math.max(300, sorted.length * 34),
+    xaxis: { gridcolor: C.border, ticksuffix:' Bn', showgrid:true, color:C.muted },
+    yaxis: { gridcolor: C.border, showgrid:false, color:C.text, tickfont:{size:11} },
+    showlegend: false,
+  }, PLOTLY_CFG);
+}
+
+function renderFX(fx) {
+  const cmap = { 'ARS': C.gold, 'USD Linked': C.blue, 'Hard USD': C.red };
+  Plotly.newPlot('chart-fx', [{
+    type: 'pie', hole: 0.65,
+    labels: Object.keys(fx),
+    values: Object.values(fx),
+    marker: { colors: Object.keys(fx).map(k => cmap[k]||C.gray), line:{color:C.bg, width:2} },
+    textfont: { size:9 },
+    hovertemplate: '%{label}: %{value:.1f}%<extra></extra>',
+  }], {
+    ...LAYOUT_BASE, height: 300,
+    legend: { orientation:'v', x:1.02, y:.5, font:{size:9, color:C.muted} },
+    showlegend: true,
+  }, PLOTLY_CFG);
+}
+
+function renderARS(arsRows, nav) {
+  const sorted = [...arsRows].sort((a,b) => a.monto - b.monto);
+  const total  = arsRows.reduce((s,r) => s+r.monto, 0);
+  Plotly.newPlot('chart-ars', [{
+    type:'bar', orientation:'h',
+    x: sorted.map(r => r.monto/1e9),
+    y: sorted.map(r => r.categoria),
+    marker: { color: sorted.map(r => ARS_COLOR[r.categoria]||C.blue), line:{width:0} },
+    text: sorted.map(r => `${r.pct.toFixed(1)}%`),
+    textposition: 'outside',
+    textfont: { size:10, color:C.text },
+    hovertemplate: '%{y}: %{x:.2f} Bn<extra></extra>',
+  }], {
+    ...LAYOUT_BASE, height:240,
+    xaxis: { gridcolor:C.border, ticksuffix:' Bn', showgrid:true, color:C.muted },
+    yaxis: { gridcolor:C.border, showgrid:false, color:C.text, tickfont:{size:11} },
+    showlegend: false,
+    annotations:[{
+      text:`Total ARS: ${fmtMM(total)}  (${(total/nav*100).toFixed(1)}% del PN)`,
+      xref:'paper', yref:'paper', x:0, y:1.12, showarrow:false,
+      font:{size:9, color:C.muted, family:'DM Mono'}, align:'left',
+    }],
+  }, PLOTLY_CFG);
+}
+
+// ── DOM builders ──────────────────────────────────────────
+function buildKPIs(nav, inversiones, creditos) {
+  const REND = ['Último Día','7 Días','30 Días','60 Días','90 Días','YTD'];
+  let html = `
+    <div class="card">
+      <div class="card-title">Patrimonio Neto</div>
+      <div class="card-val c-gold">${fmtMM(nav)}</div>
+      <div class="card-sub">Inv: ${fmtMM(inversiones)}</div>
+    </div>`;
+  REND.forEach(lbl => {
+    html += `
+    <div class="card">
+      <div class="card-title">${lbl}</div>
+      <div class="card-val c-empty" style="font-size:16px">——</div>
+      <div class="card-sub">Cuotaparte D</div>
+    </div>`;
+  });
+  document.getElementById('kpi-row').innerHTML = html;
+}
+
+function buildBalance(inversiones, creditos, pasivos, nav) {
+  const items = [
+    ['Inversiones',     inversiones, 'c-green'],
+    ['Créditos',        creditos,    'c-blue' ],
+    ['Pasivos',         pasivos,     'c-red'  ],
+    ['Patrimonio Neto', nav,         'c-gold' ],
+  ];
+  document.getElementById('balance-cards').innerHTML = items.map(([lbl,v,cls]) => `
+    <div class="card">
+      <div class="card-title">${lbl}</div>
+      <div class="card-val ${cls}">${fmtMM(v)}</div>
+    </div>`).join('');
+}
+
+function buildARSSide(arsRows, nav) {
+  const total = arsRows.reduce((s,r) => s+r.monto, 0);
+  let html = arsRows.map(r => {
+    const col = ARS_COLOR[r.categoria] || C.blue;
+    return `<div>
+      <div class="ars-item-label">${r.categoria}</div>
+      <div class="ars-item-row">
+        <div class="ars-item-pct" style="color:${col}">${r.pct.toFixed(1)}%</div>
+        <div class="ars-item-val">${fmtMM(r.monto)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  html += `<div class="ars-total">
+    <div class="ars-item-label">Total ARS</div>
+    <div class="ars-item-row">
+      <div class="ars-item-pct" style="color:var(--gold);font-size:20px">${(total/nav*100).toFixed(2)}%</div>
+    </div>
+    <div class="ars-item-val">${fmtMM(total)}</div>
+  </div>`;
+  document.getElementById('ars-side').innerHTML = html;
+}
+
+function buildHoldings(holdings, nav) {
+  const indiv = holdings.filter(r => r.isIndividual);
+  const maxPct = Math.max(...indiv.map(r => Math.abs(r.monto/nav*100)));
+  const tbody = document.getElementById('holdings-body');
+  tbody.innerHTML = indiv.map(r => {
+    const pct    = r.monto / nav * 100;
+    const barW   = Math.max(2, Math.round(Math.abs(pct) / maxPct * 60));
+    const color  = CAT_COLOR[r.clasificacion] || C.gray;
+    const instr  = r.instrumento.includes(' - ')
+      ? r.instrumento.split(' - ').slice(1).join(' - ')
+      : r.instrumento;
+    const precio = r.precio ? r.precio.toFixed(2) : '—';
+    return `<tr>
+      <td><span class="hticker">${r.ticker}</span></td>
+      <td><span class="hinstr" title="${instr}">${instr}</span></td>
+      <td><span class="htipo" style="color:${color}">${r.clasificacion}</span></td>
+      <td style="text-align:right">${precio}</td>
+      <td>
+        <div class="hbar-wrap">
+          <div class="hbar" style="width:${barW}px;background:${color}"></div>
+          <span class="hpct">${pct.toFixed(2)}%</span>
+        </div>
+      </td>
+      <td class="hmonto">${fmtMM(r.monto)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Main data processor ───────────────────────────────────
+function processWorkbook(wb, fname) {
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, { header:1, defval: null });
+
+  const holdings = parseHoldings(data);
+  const summary  = parseSummary(data);
+  const arsDetail= parseArsBreakdown(data);
+  const balance  = parseBalance(data);
+
+  const { nav, inversiones, creditos, pasivos } = balance;
+
+  // FX breakdown
+  const arsTotal = arsDetail.reduce((s,r) => s+r.monto, 0);
+  const usdlTotal= summary.filter(r => USD_L_CATS.has(r.categoria)).reduce((s,r) => s+r.monto, 0);
+  const hardTotal= summary.filter(r => HARD_CATS.has(r.categoria)).reduce((s,r) => s+r.monto, 0);
+  const fxTotal  = arsTotal + usdlTotal + hardTotal;
+  const fx = {
+    'ARS':       fxTotal ? arsTotal  / fxTotal * 100 : 0,
+    'USD Linked':fxTotal ? usdlTotal / fxTotal * 100 : 0,
+    'Hard USD':  fxTotal ? hardTotal / fxTotal * 100 : 0,
+  };
+
+  const date = extractDate(fname);
+
+  // Header
+  document.getElementById('h-sub').textContent =
+    `INFORME DE GESTIÓN · ${date} · ADMINISTRADOR: CALDERON BELISARIO`;
+  document.getElementById('h-nav').textContent = fmtMM(nav);
+  document.getElementById('h-inv').textContent = fmtMM(inversiones);
+  document.getElementById('footer-fname').textContent = fname;
+
+  // Sections
+  buildKPIs(nav, inversiones, creditos);
+  buildBalance(inversiones, creditos, pasivos, nav);
+  buildARSSide(arsDetail, nav);
+  buildHoldings(holdings, nav);
+
+  // Charts (deferred to next frame so containers have size)
+  requestAnimationFrame(() => {
+    renderAlloc(summary);
+    renderFX(fx);
+    renderARS(arsDetail, nav);
+  });
+
+  // Show dashboard
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+}
+
+// ── File handling ─────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const err = document.getElementById('upload-err');
+  err.textContent = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'array' });
+      processWorkbook(wb, file.name);
+    } catch(ex) {
+      err.textContent = 'Error al leer el archivo: ' + ex.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function resetDashboard() {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+  document.getElementById('file-input').value = '';
+}
+
+// File input
+document.getElementById('file-input').addEventListener('change', e => {
+  handleFile(e.target.files[0]);
+});
+
+// Drag & drop
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
