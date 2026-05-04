@@ -234,7 +234,7 @@
   <div class="row-2">
     <div>
       <div class="chart-lbl">Asignación por Tipo · Monto (Bn ARS) y % PN</div>
-      <div class="chart-box"><div id="chart-alloc" style="height:360px"></div></div>
+      <div class="chart-box"><div id="chart-alloc" style="min-height:300px"></div></div>
     </div>
     <div>
       <div class="chart-lbl">Exposición por Moneda (% Inversiones)</div>
@@ -246,7 +246,7 @@
   <div class="sec">Exposición en Pesos</div>
   <div class="row-3-1">
     <div>
-      <div class="chart-box"><div id="chart-ars" style="height:240px"></div></div>
+      <div class="chart-box"><div id="chart-ars" style="min-height:180px"></div></div>
     </div>
     <div class="ars-side" id="ars-side"></div>
   </div>
@@ -262,7 +262,7 @@
       <thead>
         <tr>
           <th>Ticker</th><th>Instrumento</th><th>Tipo</th>
-          <th style="text-align:right">Precio</th>
+          <th style="text-align:right">Nominales</th>
           <th>% PN</th>
           <th style="text-align:right">Monto</th>
         </tr>
@@ -311,6 +311,11 @@ function parseNum(val) {
     s = s.replace(/\./g,'');
   }
   return parseFloat(s) || 0;
+}
+
+function fmtVN(v) {
+  if (!v) return '—';
+  return Math.round(v).toLocaleString('es-AR');
 }
 
 function fmtMM(v) {
@@ -398,13 +403,14 @@ function parseBalance(data) {
 const LAYOUT_BASE = {
   paper_bgcolor: C.bg, plot_bgcolor: C.bg,
   font: { family:'DM Mono, monospace', color: C.muted, size: 10 },
-  margin: { l:8, r:8, t:24, b:8 },
+  margin: { l:12, r:56, t:28, b:12 },
 };
 const PLOTLY_CFG = { displayModeBar: false, responsive: true };
 
 // ── Chart renderers ───────────────────────────────────────
 function renderAlloc(summary) {
   const sorted = [...summary].sort((a,b) => a.monto - b.monto);
+  const h = Math.max(300, sorted.length * 42 + 60);
   Plotly.newPlot('chart-alloc', [{
     type: 'bar', orientation: 'h',
     x: sorted.map(r => r.monto/1e9),
@@ -415,28 +421,35 @@ function renderAlloc(summary) {
     textfont: { size:10, color: C.text },
     customdata: sorted.map(r => [r.monto, r.pct]),
     hovertemplate: '%{y}: $ %{customdata[0]:,.0f}  (%{customdata[1]:.2f}%)<extra></extra>',
+    cliponaxis: false,
   }], {
     ...LAYOUT_BASE,
-    height: Math.max(300, sorted.length * 34),
-    xaxis: { gridcolor: C.border, ticksuffix:' Bn', showgrid:true, color:C.muted },
-    yaxis: { gridcolor: C.border, showgrid:false, color:C.text, tickfont:{size:11} },
+    height: h,
+    xaxis: { gridcolor: C.border, ticksuffix:' Bn', showgrid:true, color:C.muted, automargin:true },
+    yaxis: { gridcolor: C.border, showgrid:false, color:C.text, tickfont:{size:11}, automargin:true },
     showlegend: false,
+    uniformtext: { mode:'hide', minsize:8 },
   }, PLOTLY_CFG);
 }
 
 function renderFX(fx) {
   const cmap = { 'ARS': C.gold, 'USD Linked': C.blue, 'Hard USD': C.red };
+  const entries = Object.entries(fx).filter(([,v]) => v > 0.01);
   Plotly.newPlot('chart-fx', [{
-    type: 'pie', hole: 0.65,
-    labels: Object.keys(fx),
-    values: Object.values(fx),
-    marker: { colors: Object.keys(fx).map(k => cmap[k]||C.gray), line:{color:C.bg, width:2} },
-    textfont: { size:9 },
+    type: 'pie', hole: 0.6,
+    labels: entries.map(([k]) => k),
+    values: entries.map(([,v]) => v),
+    marker: { colors: entries.map(([k]) => cmap[k]||C.gray), line:{color:C.bg, width:2} },
+    textinfo: 'label+percent',
+    textfont: { size:10, color: C.text },
     hovertemplate: '%{label}: %{value:.1f}%<extra></extra>',
+    textposition: 'outside',
+    automargin: true,
   }], {
     ...LAYOUT_BASE, height: 300,
-    legend: { orientation:'v', x:1.02, y:.5, font:{size:9, color:C.muted} },
-    showlegend: true,
+    margin: { l:12, r:12, t:28, b:40 },
+    legend: { orientation:'h', x:0.5, xanchor:'center', y:-0.08, font:{size:9, color:C.muted} },
+    showlegend: false,
   }, PLOTLY_CFG);
 }
 
@@ -452,10 +465,11 @@ function renderARS(arsRows, nav) {
     textposition: 'outside',
     textfont: { size:10, color:C.text },
     hovertemplate: '%{y}: %{x:.2f} Bn<extra></extra>',
+    cliponaxis: false,
   }], {
-    ...LAYOUT_BASE, height:240,
-    xaxis: { gridcolor:C.border, ticksuffix:' Bn', showgrid:true, color:C.muted },
-    yaxis: { gridcolor:C.border, showgrid:false, color:C.text, tickfont:{size:11} },
+    ...LAYOUT_BASE, height: Math.max(200, sorted.length * 52 + 60),
+    xaxis: { gridcolor:C.border, ticksuffix:' Bn', showgrid:true, color:C.muted, automargin:true },
+    yaxis: { gridcolor:C.border, showgrid:false, color:C.text, tickfont:{size:11}, automargin:true },
     showlegend: false,
     annotations:[{
       text:`Total ARS: ${fmtMM(total)}  (${(total/nav*100).toFixed(1)}% del PN)`,
@@ -532,12 +546,11 @@ function buildHoldings(holdings, nav) {
     const instr  = r.instrumento.includes(' - ')
       ? r.instrumento.split(' - ').slice(1).join(' - ')
       : r.instrumento;
-    const precio = r.precio ? r.precio.toFixed(2) : '—';
     return `<tr>
       <td><span class="hticker">${r.ticker}</span></td>
       <td><span class="hinstr" title="${instr}">${instr}</span></td>
       <td><span class="htipo" style="color:${color}">${r.clasificacion}</span></td>
-      <td style="text-align:right">${precio}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtVN(r.vn)}</td>
       <td>
         <div class="hbar-wrap">
           <div class="hbar" style="width:${barW}px;background:${color}"></div>
@@ -587,12 +600,12 @@ function processWorkbook(wb, fname) {
   buildARSSide(arsDetail, nav);
   buildHoldings(holdings, nav);
 
-  // Charts (deferred to next frame so containers have size)
-  requestAnimationFrame(() => {
+  // Charts (small delay so containers are laid out before Plotly measures them)
+  setTimeout(() => {
     renderAlloc(summary);
     renderFX(fx);
     renderARS(arsDetail, nav);
-  });
+  }, 80);
 
   // Show dashboard
   document.getElementById('upload-screen').style.display = 'none';
