@@ -574,9 +574,9 @@ const MNAME = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','N
 function extractMaturity(ticker) {
   let m;
   // T30J6, S31G6, M31G6, T15E7, T30J7 → [1-char][2-digit-day][month][1-digit-year]
-  m = ticker.match(/^[A-Z](\d{2})([EFMAYLGSOND])(\d)$/);
-  if (m && MCODE[m[2]]) {
-    const day = parseInt(m[1]), mon = MCODE[m[2]], year = 2020 + parseInt(m[3]);
+  m = ticker.match(/^[A-Z](\d{2})([EFMAYLGSOND])(\d)$/i);
+  if (m && MCODE[m[2].toUpperCase()]) {
+    const day = parseInt(m[1]), mon = MCODE[m[2].toUpperCase()], year = 2020 + parseInt(m[3]);
     return {
       sortKey: year * 100 + mon,
       label:   `${MNAME[mon]} ${String(year).slice(2)}`,
@@ -584,14 +584,30 @@ function extractMaturity(ticker) {
     };
   }
   // TTJ26, TTS26, TTD26, TMF27, TMG27, TMF28 → [2-3-char-prefix][month][2-digit-year]
-  m = ticker.match(/^[A-Z]{2,3}([EFMAYLGSOND])(\d{2})$/);
-  if (m && MCODE[m[1]]) {
-    const mon = MCODE[m[1]], year = 2000 + parseInt(m[2]);
+  m = ticker.match(/^[A-Z]{2,3}([EFMAYLGSOND])(\d{2})$/i);
+  if (m && MCODE[m[1].toUpperCase()]) {
+    const mon = MCODE[m[1].toUpperCase()], year = 2000 + parseInt(m[2]);
     return {
       sortKey: year * 100 + mon,
       label:   `${MNAME[mon]} ${String(year).slice(2)}`,
       dateStr: `${MNAME[mon]} ${year}`,
     };
+  }
+  return null;
+}
+
+function parseDateFromName(instrumento) {
+  // Busca DD/MM/YYYY o DD.MM.YYYY en el nombre del instrumento
+  const m = instrumento.match(/(\d{2})[\/\.](\d{2})[\/\.](\d{4})/);
+  if (m) {
+    const day = parseInt(m[1]), mon = parseInt(m[2]), year = parseInt(m[3]);
+    if (mon >= 1 && mon <= 12 && year >= 2024 && year <= 2040) {
+      return {
+        sortKey: year * 100 + mon,
+        label:   `${MNAME[mon]} ${String(year).slice(2)}`,
+        dateStr: `${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}/${year}`,
+      };
+    }
   }
   return null;
 }
@@ -602,7 +618,7 @@ function renderMaturity(holdings, nav) {
   const items = holdings
     .filter(r => r.isIndividual)
     .map(r => {
-      const mat = extractMaturity(r.ticker);
+      const mat = extractMaturity(r.ticker) || parseDateFromName(r.instrumento);
       if (!mat) return null;
       const is2028p = mat.sortKey > CUTOFF;
       return {
