@@ -238,11 +238,9 @@
 
 <!-- Upload screen -->
 <div id="upload-screen">
-  <div>
-    <div class="upload-title">Toronto Trust <span>Renta Fija Plus</span></div>
-    <div style="font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:.08em">
-      INFORME DE GESTIÓN · ADMINISTRADOR: CALDERON BELISARIO
-    </div>
+  <div class="upload-brand">
+    <div class="brand-main">Toronto Trust <span>Renta Fija Plus</span></div>
+    <div class="brand-sub">Informe de Gestión · Administrador: Calderon Belisario</div>
   </div>
   <div class="drop-zone" id="drop-zone">
     <input type="file" id="file-input" accept=".xlsx,.xls">
@@ -258,20 +256,24 @@
   <div class="watermark">ANÁLISIS INTERNO · CONFIDENCIAL</div>
 
   <div class="header">
-    <div>
+    <div class="header-left">
       <div class="header-title">Toronto Trust <span>Renta Fija Plus</span></div>
       <div class="header-sub" id="h-sub">INFORME DE GESTIÓN · — · ADMINISTRADOR: CALDERON BELISARIO</div>
       <span class="tag">FCI Renta Fija</span>
       <span class="tag">CNV Reg.</span>
       <span class="tag">ARS</span>
     </div>
-    <div class="header-nav">
-      <div class="nav-val" id="h-nav"></div>
-      <div class="nav-lbl">Patrimonio Neto</div>
-      <div class="nav-inv" id="h-inv"></div>
-      <div style="font-size:9px;color:var(--muted)">Inversiones</div>
-      <div style="margin-top:12px">
-        <button class="reload-btn" onclick="resetDashboard()">↑ Cargar nuevo archivo</button>
+    <div class="header-right">
+      <div class="hstat">
+        <div class="hstat-val" id="h-nav"></div>
+        <div class="hstat-lbl">Patrimonio Neto</div>
+      </div>
+      <div class="hstat">
+        <div class="hstat-sub" id="h-inv"></div>
+        <div class="hstat-lbl">Inversiones</div>
+      </div>
+      <div class="hstat">
+        <button class="reload-btn" onclick="resetDashboard()">↑ Cargar nuevo</button>
       </div>
     </div>
   </div>
@@ -584,20 +586,20 @@ function buildARSSide(arsRows) {
   const totalPct = arsRows.reduce((s,r) => s+r.pct,   0);
   let html = arsRows.map(r => {
     const col = ARS_COLOR[r.categoria] || C.blue;
-    return `<div>
-      <div class="ars-item-label">${r.categoria}</div>
-      <div class="ars-item-row">
-        <div class="ars-item-pct" style="color:${col}">${r.pct.toFixed(1)}%</div>
-        <div class="ars-item-val">${fmtMM(r.monto)}</div>
+    return `<div class="ars-item">
+      <div class="ars-item-left">
+        <div class="ars-dot" style="background:${col}"></div>
+        <div>
+          <div class="ars-item-label">${r.categoria}</div>
+          <div class="ars-item-val">${fmtMM(r.monto)}</div>
+        </div>
       </div>
+      <div class="ars-item-pct" style="color:${col}">${r.pct.toFixed(1)}%</div>
     </div>`;
   }).join('');
   html += `<div class="ars-total">
-    <div class="ars-item-label">Total ARS</div>
-    <div class="ars-item-row">
-      <div class="ars-item-pct" style="color:var(--gold);font-size:20px">${totalPct.toFixed(2)}%</div>
-    </div>
-    <div class="ars-item-val">${fmtMM(total)}</div>
+    <div class="ars-total-lbl">Total ARS</div>
+    <div class="ars-total-val">${totalPct.toFixed(2)}%</div>
   </div>`;
   document.getElementById('ars-side').innerHTML = html;
 }
