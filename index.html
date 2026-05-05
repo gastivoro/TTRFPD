@@ -119,6 +119,7 @@
     /* Cards */
     .cards { display: grid; gap: 10px; }
     .cards-7 { grid-template-columns: repeat(7, 1fr); }
+    .cards-5 { grid-template-columns: repeat(5, 1fr); }
     .cards-4 { grid-template-columns: repeat(4, 1fr); }
     .card {
       background: var(--surf); border: 1px solid var(--border);
@@ -229,6 +230,7 @@
     @media (max-width: 700px) {
       body { padding: 16px; }
       .cards-7 { grid-template-columns: repeat(2, 1fr); }
+      .cards-5 { grid-template-columns: repeat(2, 1fr); }
       .cards-4 { grid-template-columns: repeat(2, 1fr); }
       .drop-zone { width: 100%; }
     }
@@ -311,6 +313,11 @@
   <!-- Balance -->
   <div class="sec">Estructura del Balance</div>
   <div class="cards cards-4" id="balance-cards"></div>
+
+  <!-- Rendimientos CAFCI Clase D -->
+  <div class="sec">Rendimientos CAFCI — Clase D</div>
+  <div id="cafci-row" class="cards cards-5" style="margin-bottom:4px"></div>
+  <div id="cafci-status" style="font-size:9px;color:var(--muted);margin-bottom:8px"></div>
 
   <!-- Sector ONs -->
   <div class="sec">Exposición USD Linked — por Emisor / Sector</div>
@@ -661,17 +668,6 @@ function renderSectorONs(holdings, nav) {
     byEmisor[e].tickers.push(r.ticker);
   });
 
-  // Agregar Hard USD / Soberano no corporativo
-  const HARD_USD_TICKERS = new Set(['GD30','GD38','GD41','AL30','BPOC7']);
-  const SOV_USD_TICKERS  = new Set(['TZV27','TZV28']);
-  let hardPct = 0, sovPct = 0, hardTick = [], sovTick = [];
-  holdings.filter(r => r.isIndividual).forEach(r => {
-    const t = r.ticker.toUpperCase();
-    if (HARD_USD_TICKERS.has(t)) { hardPct += r.monto/nav*100; hardTick.push(r.ticker); }
-    if (SOV_USD_TICKERS.has(t))  { sovPct  += r.monto/nav*100; sovTick.push(r.ticker); }
-  });
-  if (hardPct > 0) byEmisor['Hard USD']    = { pct: hardPct, tickers: hardTick };
-  if (sovPct > 0)  byEmisor['Soberano USD'] = { pct: sovPct,  tickers: sovTick };
 
   const entries = Object.entries(byEmisor).filter(([,v]) => v.pct > 0)
     .sort((a,b) => b[1].pct - a[1].pct);
@@ -935,9 +931,74 @@ function processWorkbook(wb, fname) {
     renderSectorONs(holdings, nav);
   }, 80);
 
+  // CAFCI rendimientos Clase D (async, no bloquea)
+  loadCafciRendimientos();
+
   // Show dashboard
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
+}
+
+// ── Rendimientos CAFCI Clase D ────────────────────────────
+async function loadCafciRendimientos() {
+  const statusEl = document.getElementById('cafci-status');
+  const rowEl    = document.getElementById('cafci-row');
+  statusEl.textContent = 'Cargando datos CAFCI…';
+  try {
+    const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf  = await res.arrayBuffer();
+    const wb   = XLSX.read(buf, { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    const row  = rows.find(r => typeof r[0] === 'string' &&
+                                r[0].toLowerCase().includes('toronto trust renta fija plus') &&
+                                r[0].toLowerCase().includes('clase d'));
+    if (!row) throw new Error('Clase D no encontrada');
+
+    // Columnas según planilla CAFCI pb_get (verificado 04/05/26)
+    // 0=nombre, 1=moneda, 4=fecha, 5=VCP_hoy, 6=VCP_ayer,
+    // 7=rend_dia%, 10=rend_mes%, 11=rend_año%, 14=patrimonio
+    const fecha    = row[4]  ?? '—';
+    const vcp      = typeof row[5]  === 'number' ? row[5].toLocaleString('es-AR', {minimumFractionDigits:3, maximumFractionDigits:3}) : '—';
+    const dia      = typeof row[7]  === 'number' ? row[7].toFixed(2)  : '—';
+    const mes      = typeof row[10] === 'number' ? row[10].toFixed(2) : '—';
+    const anio     = typeof row[11] === 'number' ? row[11].toFixed(2) : '—';
+    const patrim   = typeof row[14] === 'number' ? fmtMM(row[14])     : '—';
+    const diaCol   = parseFloat(dia) >= 0 ? 'c-green' : 'c-red';
+    const mesCol   = parseFloat(mes) >= 0 ? 'c-green' : 'c-red';
+    const anioCol  = parseFloat(anio)>= 0 ? 'c-green' : 'c-red';
+
+    rowEl.innerHTML = `
+      <div class="card">
+        <div class="card-title">Cuotaparte Clase D</div>
+        <div class="card-val c-gold">$${vcp}</div>
+        <div class="card-sub">${fecha}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Rend. Día</div>
+        <div class="card-val ${diaCol}">${dia}%</div>
+        <div class="card-sub">vs ayer</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Rend. Mes</div>
+        <div class="card-val ${mesCol}">${mes}%</div>
+        <div class="card-sub">mes calendario</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Rend. Año</div>
+        <div class="card-val ${anioCol}">${anio}%</div>
+        <div class="card-sub">año calendario</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Patrimonio Clase D</div>
+        <div class="card-val c-blue">${patrim}</div>
+        <div class="card-sub">ARS</div>
+      </div>`;
+    statusEl.textContent = `Fuente: CAFCI · ${fecha}`;
+  } catch(e) {
+    rowEl.innerHTML = '';
+    statusEl.textContent = `No se pudieron cargar datos CAFCI (${e.message})`;
+  }
 }
 
 // ── File handling ─────────────────────────────────────────
