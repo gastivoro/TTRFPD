@@ -133,22 +133,33 @@
     .ars-total      { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px; }
 
     /* Holdings table */
-    .htable-wrap { overflow-x: auto; background: var(--surf); border: 1px solid var(--border); }
+    .htable-wrap { overflow-x: auto; background: var(--surf); border: 1px solid var(--border); border-radius: 2px; }
     table.htable { width: 100%; border-collapse: collapse; font-size: 11px; }
     table.htable th {
-      background: var(--surf); color: var(--muted); font-size: 8px;
-      letter-spacing: .18em; text-transform: uppercase; padding: 10px 14px;
-      text-align: left; border-bottom: 2px solid var(--border); white-space: nowrap;
+      background: rgba(14,18,30,.8); color: var(--muted); font-size: 8px;
+      letter-spacing: .18em; text-transform: uppercase; padding: 11px 14px;
+      text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap;
+      position: sticky; top: 0; z-index: 1;
     }
-    table.htable td { padding: 8px 14px; border-bottom: 1px solid rgba(30,37,56,.8); vertical-align: middle; }
-    table.htable tr:hover td { background: rgba(201,168,76,.04); }
-    .hticker { font-weight: 500; color: var(--gold); letter-spacing: .04em; }
-    .hinstr  { color: var(--muted); font-size: 10px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .htipo   { font-size: 9px; background: rgba(255,255,255,.05); padding: 2px 6px; white-space: nowrap; }
+    table.htable td { padding: 9px 14px; border-bottom: 1px solid rgba(30,37,56,.6); vertical-align: middle; }
+    table.htable tbody tr:hover td { background: rgba(201,168,76,.05); }
+    table.htable tbody tr:nth-child(even) td { background: rgba(255,255,255,.012); }
+    table.htable tbody tr:nth-child(even):hover td { background: rgba(201,168,76,.05); }
+    .hticker { font-weight: 600; color: var(--gold); letter-spacing: .05em; font-size: 12px; }
+    .hinstr  { color: #b0b8cc; font-size: 10px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .htipo   { display: inline-block; font-size: 8px; letter-spacing: .08em; border-radius: 2px;
+               background: rgba(255,255,255,.06); padding: 2px 7px; white-space: nowrap; }
+    .hemit   { display: inline-block; font-size: 8px; letter-spacing: .06em; border-radius: 2px;
+               padding: 1px 6px; margin-top: 3px; white-space: nowrap; }
+    .hvcto   { font-size: 9px; color: var(--muted); white-space: nowrap; }
     .hbar-wrap { display: flex; align-items: center; gap: 7px; }
-    .hbar    { height: 3px; border-radius: 2px; opacity: .7; }
-    .hpct    { font-weight: 500; white-space: nowrap; }
+    .hbar    { height: 3px; border-radius: 2px; opacity: .75; flex-shrink: 0; }
+    .hpct    { font-weight: 600; white-space: nowrap; font-size: 11px; }
     .hmonto  { color: var(--muted); font-size: 10px; text-align: right; white-space: nowrap; }
+
+    /* Sector ONs */
+    .sector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .sector-grid { grid-template-columns: 1fr; } }
 
     /* Upload button (inside dashboard) */
     .reload-btn {
@@ -259,13 +270,24 @@
   <div class="sec">Estructura del Balance</div>
   <div class="cards cards-4" id="balance-cards"></div>
 
+  <!-- Sector ONs -->
+  <div class="sec">Exposición USD Linked — por Emisor / Sector</div>
+  <div class="sector-grid">
+    <div>
+      <div class="chart-lbl">Distribución por emisor corporativo (% PN)</div>
+      <div class="chart-box"><div id="chart-sector-ons" style="min-height:220px"></div></div>
+    </div>
+    <div id="sector-ons-table" style="padding:4px 0"></div>
+  </div>
+
   <!-- Holdings -->
   <div class="sec">Holdings — Títulos Individuales</div>
   <div class="htable-wrap">
     <table class="htable">
       <thead>
         <tr>
-          <th>Ticker</th><th>Instrumento</th><th>Tipo</th>
+          <th>Ticker</th><th>Instrumento</th><th>Tipo / Emisor</th>
+          <th>Vcto</th>
           <th style="text-align:right">Nominales</th>
           <th>% PN</th>
           <th style="text-align:right">Monto</th>
@@ -540,6 +562,17 @@ function buildARSSide(arsRows) {
   document.getElementById('ars-side').innerHTML = html;
 }
 
+const SECTOR_COLOR = {
+  'YPF':         '#e67e22',
+  'Pan American':'#e67e22',
+  'Vista Oil':   '#d35400',
+  'Telecom':     '#4c7bc9',
+  'Cresud':      '#4cc97b',
+  'Med. & Roca': '#c94c4c',
+  'Soberano USD':'#9b59b6',
+  'Hard USD':    '#c94c4c',
+};
+
 function buildHoldings(holdings, nav) {
   const indiv = holdings.filter(r => r.isIndividual);
   const maxPct = Math.max(...indiv.map(r => Math.abs(r.monto/nav*100)));
@@ -551,23 +584,101 @@ function buildHoldings(holdings, nav) {
     const instr  = r.instrumento.includes(' - ')
       ? r.instrumento.split(' - ').slice(1).join(' - ')
       : r.instrumento;
+    const emisor = ON_EMISOR[r.ticker.toUpperCase()];
+    const emisorColor = SECTOR_COLOR[emisor] || C.blue;
+    const mat    = extractMaturity(r.ticker) || parseDateFromName(r.instrumento);
+    const vctoStr = mat ? mat.dateStr : '—';
     return `<tr>
       <td><span class="hticker">${r.ticker}</span></td>
-      <td><span class="hinstr" title="${instr}">${instr}</span></td>
+      <td><span class="hinstr" title="${r.instrumento}">${instr}</span></td>
       <td>
-        <span class="htipo" style="color:${color}">${r.clasificacion}</span>
-        ${ON_EMISOR[r.ticker.toUpperCase()] ? `<br><span style="font-size:8px;color:var(--blue);letter-spacing:.06em">${ON_EMISOR[r.ticker.toUpperCase()]}</span>` : ''}
+        <span class="htipo" style="color:${color};border-left:2px solid ${color}">${r.clasificacion}</span>
+        ${emisor ? `<br><span class="hemit" style="color:${emisorColor};background:${emisorColor}18;border:1px solid ${emisorColor}33">${emisor}</span>` : ''}
       </td>
+      <td class="hvcto">${vctoStr}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtVN(r.vn)}</td>
       <td>
         <div class="hbar-wrap">
           <div class="hbar" style="width:${barW}px;background:${color}"></div>
-          <span class="hpct">${pct.toFixed(2)}%</span>
+          <span class="hpct" style="color:${color}">${pct.toFixed(2)}%</span>
         </div>
       </td>
       <td class="hmonto">${fmtMM(r.monto)}</td>
     </tr>`;
   }).join('');
+}
+
+function renderSectorONs(holdings, nav) {
+  // ONs corporativas por emisor/sector
+  const byEmisor = {};
+  holdings.filter(r => r.isIndividual).forEach(r => {
+    const e = ON_EMISOR[r.ticker.toUpperCase()];
+    if (!e) return;
+    if (!byEmisor[e]) byEmisor[e] = { pct:0, tickers:[] };
+    byEmisor[e].pct += r.monto / nav * 100;
+    byEmisor[e].tickers.push(r.ticker);
+  });
+
+  // Agregar Hard USD / Soberano no corporativo
+  const HARD_USD_TICKERS = new Set(['GD30','GD38','GD41','AL30','BPOC7']);
+  const SOV_USD_TICKERS  = new Set(['TZV27','TZV28']);
+  let hardPct = 0, sovPct = 0, hardTick = [], sovTick = [];
+  holdings.filter(r => r.isIndividual).forEach(r => {
+    const t = r.ticker.toUpperCase();
+    if (HARD_USD_TICKERS.has(t)) { hardPct += r.monto/nav*100; hardTick.push(r.ticker); }
+    if (SOV_USD_TICKERS.has(t))  { sovPct  += r.monto/nav*100; sovTick.push(r.ticker); }
+  });
+  if (hardPct > 0) byEmisor['Hard USD']    = { pct: hardPct, tickers: hardTick };
+  if (sovPct > 0)  byEmisor['Soberano USD'] = { pct: sovPct,  tickers: sovTick };
+
+  const entries = Object.entries(byEmisor).filter(([,v]) => v.pct > 0)
+    .sort((a,b) => b[1].pct - a[1].pct);
+  if (entries.length === 0) return;
+
+  Plotly.newPlot('chart-sector-ons', [{
+    type: 'bar', orientation: 'h',
+    x: entries.map(([,v]) => v.pct),
+    y: entries.map(([k]) => k),
+    marker: { color: entries.map(([k]) => SECTOR_COLOR[k] || C.gray), line:{width:0} },
+    text: entries.map(([,v]) => `${v.pct.toFixed(2)}%`),
+    textposition: 'outside',
+    textfont: { size:10, color:C.text },
+    customdata: entries.map(([,v]) => v.tickers.join(', ')),
+    hovertemplate: '<b>%{y}</b><br>%{customdata}<br><b>%{x:.2f}% del PN</b><extra></extra>',
+    cliponaxis: false,
+  }], {
+    ...LAYOUT_BASE,
+    height: Math.max(200, entries.length * 48 + 60),
+    xaxis: { gridcolor:C.border, ticksuffix:'%', showgrid:true, color:C.muted, automargin:true },
+    yaxis: { gridcolor:C.border, showgrid:false, color:C.text, tickfont:{size:11}, automargin:true },
+    showlegend: false,
+  }, PLOTLY_CFG);
+
+  // Tabla lateral
+  const total = entries.reduce((s,[,v]) => s+v.pct, 0);
+  document.getElementById('sector-ons-table').innerHTML = `
+    <div style="padding:8px 0">
+      ${entries.map(([k,v]) => {
+        const col = SECTOR_COLOR[k] || C.gray;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:3px;height:28px;background:${col};border-radius:2px;flex-shrink:0"></div>
+            <div>
+              <div style="font-size:10px;font-weight:600;color:${col}">${k}</div>
+              <div style="font-size:8px;color:var(--muted);letter-spacing:.04em">${v.tickers.join(' · ')}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:14px;font-weight:600;color:${col}">${v.pct.toFixed(2)}%</div>
+            <div style="font-size:8px;color:var(--muted)">${fmtMM(v.pct/100*nav*1e9)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+      <div style="display:flex;justify-content:space-between;padding:8px 12px">
+        <span style="font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Total USD</span>
+        <span style="font-size:14px;font-weight:600;color:var(--blue)">${total.toFixed(2)}%</span>
+      </div>
+    </div>`;
 }
 
 // ── Maturity parser + chart ───────────────────────────────
@@ -779,6 +890,7 @@ function processWorkbook(wb, fname) {
     renderFX(fx);
     renderARS(arsDetail, nav);
     renderMaturity(holdings, nav);
+    renderSectorONs(holdings, nav);
   }, 80);
 
   // Show dashboard
