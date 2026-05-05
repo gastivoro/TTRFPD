@@ -943,106 +943,94 @@ function processWorkbook(wb, fname) {
 }
 
 // ── CAFCI — rendimientos Clase D en las KPI cards ─────────
-// Clase D id: 3738 (verificado 04/05/26 desde pb_get col 20)
-const CAFCI_CLASE_D = 3738;
+// pb_get da: día%, YTD%, 12M%. Historial (7/30/60/90d) se acumula en localStorage.
+const VCP_LS = 'ttrfp_vcp_d';
+
+function vcpSerieLoad()  { try { return JSON.parse(localStorage.getItem(VCP_LS) || '[]'); } catch { return []; } }
+function vcpSerieSave(s) { try { localStorage.setItem(VCP_LS, JSON.stringify(s)); } catch {} }
 
 async function loadCafciKPIs() {
   try {
-    // Paso 1: VCP hoy + YTD desde planilla diaria
-    const pbRes = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
-    if (!pbRes.ok) throw new Error(`pb_get HTTP ${pbRes.status}`);
-    const pbBuf  = await pbRes.arrayBuffer();
-    const pbWb   = XLSX.read(pbBuf, { type: 'array' });
-    const pbRows = XLSX.utils.sheet_to_json(pbWb.Sheets[pbWb.SheetNames[0]], { header: 1 });
-    const hoy = pbRows.find(r => typeof r[0]==='string'
-      && r[0].toLowerCase().includes('toronto trust renta fija plus')
-      && r[0].toLowerCase().includes('clase d'));
-    if (!hoy) throw new Error('Clase D no encontrada en pb_get');
-
-    const vcpHoy = hoy[5];   // VCP hoy
-    const diaRend = hoy[7];  // rend día %
-    const ytd     = hoy[10]; // rend YTD (año calendario)
-    const fecha   = hoy[4];
-
-    // Paso 2: historial de VCPs (últimos 100 días) para calcular 7/30/60/90d
-    const hasta = new Date();
-    const desde = new Date(hasta); desde.setDate(desde.getDate() - 100);
-    const fmt = d => d.toISOString().slice(0,10);
-    const histRes = await fetch(
-      `https://api.pub.cafci.org.ar/estadistica?idClase=${CAFCI_CLASE_D}&desde=${fmt(desde)}&hasta=${fmt(hasta)}`,
-      { cache: 'no-store' }
+    const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf  = await res.arrayBuffer();
+    const rows = XLSX.utils.sheet_to_json(
+      XLSX.read(buf, { type:'array' }).Sheets[XLSX.read(buf,{type:'array'}).SheetNames[0]],
+      { header: 1 }
     );
-    if (!histRes.ok) throw new Error(`estadistica HTTP ${histRes.status}`);
-    const hist = await histRes.json();
+    const r = rows.find(x => typeof x[0]==='string'
+      && x[0].toLowerCase().includes('toronto trust renta fija plus')
+      && x[0].toLowerCase().includes('clase d'));
+    if (!r) throw new Error('Clase D no encontrada');
 
-    // Ordenar por fecha ascendente — cada item tiene { fecha, vcp } o similar
-    // Probar distintas keys según respuesta real del API
-    const serie = (Array.isArray(hist) ? hist : hist.data ?? hist.series ?? [])
-      .map(e => ({
-        fecha: e.fecha ?? e.date ?? e.Fecha,
-        vcp:   parseFloat(e.vcp ?? e.VCP ?? e.valor ?? e.value ?? 0),
-      }))
-      .filter(e => e.fecha && e.vcp > 0)
-      .sort((a,b) => a.fecha < b.fecha ? -1 : 1);
+    // Columnas verificadas 04/05/26: 4=fecha dd/mm/yy, 5=VCP, 7=día%, 10=YTD%, 11=12M%
+    const vcpHoy  = r[5];
+    const diaRend = r[7];
+    const ytd     = r[10];
+    const m12     = r[11];
+    const fecha   = r[4] ?? '';
 
-    // Función: VCP más cercano a N días atrás
-    function vcpNDias(n) {
-      const target = new Date(hasta); target.setDate(target.getDate() - n);
-      const iso = fmt(target);
-      // buscar el punto más cercano anterior o igual
+    // Parsear fecha a ISO (dd/mm/yy o dd/mm/yyyy)
+    const fp = typeof fecha==='string' ? fecha.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/) : null;
+    const fechaISO = fp ? `${fp[3].length===2 ? 2000+ +fp[3] : +fp[3]}-${fp[2]}-${fp[1]}` : null;
+
+    // Guardar VCP de hoy en serie local
+    if (fechaISO && vcpHoy > 0) {
+      let serie = vcpSerieLoad();
+      const idx = serie.findIndex(e => e.d === fechaISO);
+      if (idx === -1) serie.push({ d: fechaISO, v: vcpHoy });
+      else serie[idx].v = vcpHoy;
+      // Conservar últimos 120 días
+      const cut = new Date(); cut.setDate(cut.getDate() - 120);
+      const cutISO = cut.toISOString().slice(0,10);
+      serie = serie.filter(e => e.d >= cutISO).sort((a,b) => a.d < b.d ? -1 : 1);
+      vcpSerieSave(serie);
+    }
+
+    // Calcular retorno desde VCP hace N días (tomando la observación más cercana anterior)
+    const serie = vcpSerieLoad();
+    function vcpHaceN(n) {
+      const tgt = new Date(); tgt.setDate(tgt.getDate() - n);
+      const iso = tgt.toISOString().slice(0,10);
       let best = null;
-      for (const p of serie) { if (p.fecha <= iso) best = p; else break; }
-      return best ? best.vcp : null;
+      for (const e of serie) { if (e.d <= iso) best = e; else break; }
+      return best ? best.v : null;
+    }
+    function rend(vAhora, vAntes) {
+      return (vAhora && vAntes) ? (vAhora / vAntes - 1) * 100 : null;
     }
 
-    function pct(vNow, vPrev) {
-      if (!vNow || !vPrev) return null;
-      return (vNow / vPrev - 1) * 100;
-    }
+    const r7  = rend(vcpHoy, vcpHaceN(7));
+    const r30 = rend(vcpHoy, vcpHaceN(30));
+    const r60 = rend(vcpHoy, vcpHaceN(60));
+    const r90 = rend(vcpHoy, vcpHaceN(90));
 
-    const r7  = pct(vcpHoy, vcpNDias(7));
-    const r30 = pct(vcpHoy, vcpNDias(30));
-    const r60 = pct(vcpHoy, vcpNDias(60));
-    const r90 = pct(vcpHoy, vcpNDias(90));
-
-    function fillCard(id, val, sub) {
+    function fillCard(id, lbl, val, sub) {
       const el = document.getElementById(id);
       if (!el) return;
       const col = val === null ? 'c-empty' : val >= 0 ? 'c-green' : 'c-red';
       const txt = val === null ? '——' : val.toFixed(2) + '%';
       el.innerHTML = `
-        <div class="card-title">${el.querySelector('.card-title').textContent}</div>
-        <div class="card-val ${col}" style="${val===null?'font-size:16px':''}">${txt}</div>
-        <div class="card-sub">${sub ?? 'Cuotaparte D'}</div>`;
+        <div class="card-title">${lbl}</div>
+        <div class="card-val ${col}" style="${val===null ? 'font-size:16px' : ''}">${txt}</div>
+        <div class="card-sub">${sub}</div>`;
     }
 
-    fillCard('kpi-d1',  diaRend,  `VCP $${vcpHoy?.toLocaleString('es-AR',{minimumFractionDigits:0})}`);
-    fillCard('kpi-d7',  r7,   'Cuotaparte D');
-    fillCard('kpi-d30', r30,  'Cuotaparte D');
-    fillCard('kpi-d60', r60,  'Cuotaparte D');
-    fillCard('kpi-d90', r90,  'Cuotaparte D');
-    fillCard('kpi-ytd', ytd,  `Año cal · ${fecha}`);
+    const vcpFmt = vcpHoy.toLocaleString('es-AR', { minimumFractionDigits: 0 });
+    fillCard('kpi-d1',  'Último Día', diaRend, `VCP $${vcpFmt} · ${fecha}`);
+    fillCard('kpi-d7',  '7 Días',     r7,  r7  !== null ? 'Cuotaparte D' : 'sin hist. aún');
+    fillCard('kpi-d30', '30 Días',    r30, r30 !== null ? 'Cuotaparte D' : 'sin hist. aún');
+    fillCard('kpi-d60', '60 Días',    r60, r60 !== null ? 'Cuotaparte D' : 'sin hist. aún');
+    fillCard('kpi-d90', '90 Días',    r90, r90 !== null ? 'Cuotaparte D' : 'sin hist. aún');
+    fillCard('kpi-ytd', 'YTD',        ytd, `Año calendario · ${fecha}`);
 
   } catch(e) {
-    console.warn('CAFCI KPIs:', e.message);
-    // Intentar sólo con pb_get (día + YTD) si el historial falla
-    try {
-      const pbRes2 = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'default' });
-      const pbBuf2  = await pbRes2.arrayBuffer();
-      const pbRows2 = XLSX.utils.sheet_to_json(
-        XLSX.read(pbBuf2,{type:'array'}).Sheets[XLSX.read(pbBuf2,{type:'array'}).SheetNames[0]],
-        {header:1}
-      );
-      const h2 = pbRows2.find(r => typeof r[0]==='string'
-        && r[0].toLowerCase().includes('toronto trust renta fija plus')
-        && r[0].toLowerCase().includes('clase d'));
-      if (h2) {
-        const el1 = document.getElementById('kpi-d1');
-        const elY  = document.getElementById('kpi-ytd');
-        if (el1) { const c=h2[7]>=0?'c-green':'c-red'; el1.innerHTML=`<div class="card-title">Último Día</div><div class="card-val ${c}">${h2[7].toFixed(2)}%</div><div class="card-sub">VCP $${h2[5].toLocaleString('es-AR',{minimumFractionDigits:0})}</div>`; }
-        if (elY)  { elY.innerHTML=`<div class="card-title">YTD</div><div class="card-val c-green">${h2[10].toFixed(2)}%</div><div class="card-sub">Año cal · ${h2[4]}</div>`; }
-      }
-    } catch(_) {}
+    console.error('CAFCI KPIs:', e);
+    const el = document.getElementById('kpi-d1');
+    if (el) el.innerHTML = `
+      <div class="card-title">Último Día</div>
+      <div class="card-val c-empty" style="font-size:9px;color:var(--red)">${e.message}</div>
+      <div class="card-sub">CAFCI error</div>`;
   }
 }
 
