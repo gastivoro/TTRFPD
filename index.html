@@ -571,7 +571,14 @@ function buildHoldings(holdings, nav) {
 const MCODE = { E:1, F:2, M:3, A:4, Y:5, J:6, L:7, G:8, S:9, O:10, N:11, D:12 };
 const MNAME = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
+// Tickers sin código de mes estándar — fecha conocida hardcodeada
+const TICKER_DATES = {
+  'TZV28': { sortKey:202806, label:'Jun 28', dateStr:'30/06/2028' },
+};
+
 function extractMaturity(ticker) {
+  const t = ticker.toUpperCase();
+  if (TICKER_DATES[t]) return TICKER_DATES[t];
   let m;
   // T30J6, S31G6, M31G6, T15E7, T30J7 → [1-char][2-digit-day][month][1-digit-year]
   m = ticker.match(/^[A-Z](\d{2})([EFMAYLGSOND])(\d)$/i);
@@ -600,7 +607,7 @@ function parseDateFromName(instrumento) {
   const s = instrumento.replace(/\xa0/g, ' ');
 
   function makeMat(day, mon, year) {
-    if (mon < 1 || mon > 12 || year < 2024 || year > 2040) return null;
+    if (mon < 1 || mon > 12 || year < 2024 || year > 2060) return null;
     return {
       sortKey: year * 100 + mon,
       label:   `${MNAME[mon]} ${String(year).slice(2)}`,
