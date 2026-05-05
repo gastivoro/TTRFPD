@@ -118,9 +118,10 @@
 
     /* Cards */
     .cards { display: grid; gap: 10px; }
-    .cards-7 { grid-template-columns: repeat(7, 1fr); }
-    .cards-5 { grid-template-columns: repeat(5, 1fr); }
-    .cards-4 { grid-template-columns: repeat(4, 1fr); }
+    .cards-7   { grid-template-columns: repeat(7, 1fr); }
+    .cards-5   { grid-template-columns: repeat(5, 1fr); }
+    .cards-4   { grid-template-columns: repeat(4, 1fr); }
+    .cards-dyn { display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; gap: 10px; }
     .card {
       background: var(--surf); border: 1px solid var(--border);
       border-top: 2px solid var(--border2);
@@ -314,10 +315,10 @@
   <div class="sec">Estructura del Balance</div>
   <div class="cards cards-4" id="balance-cards"></div>
 
-  <!-- Rendimientos CAFCI Clase D -->
-  <div class="sec">Rendimientos CAFCI — Clase D</div>
-  <div id="cafci-row" class="cards cards-5" style="margin-bottom:4px"></div>
-  <div id="cafci-status" style="font-size:9px;color:var(--muted);margin-bottom:8px"></div>
+  <!-- Rendimientos -->
+  <div class="sec">Rendimiento Implícito — por Plazo</div>
+  <div id="rend-plazos" class="cards cards-dyn" style="margin-bottom:4px"></div>
+  <div id="cafci-bar" style="margin-bottom:20px"></div>
 
   <!-- Sector ONs -->
   <div class="sec">Exposición USD Linked — por Emisor / Sector</div>
@@ -931,73 +932,136 @@ function processWorkbook(wb, fname) {
     renderSectorONs(holdings, nav);
   }, 80);
 
-  // CAFCI rendimientos Clase D (async, no bloquea)
-  loadCafciRendimientos();
+  // Rendimientos por plazo (calculado desde holdings)
+  buildRendimientosPlazo(holdings, nav);
+  // CAFCI VCP Clase D como dato secundario
+  loadCafciVCP();
 
   // Show dashboard
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
 }
 
-// ── Rendimientos CAFCI Clase D ────────────────────────────
-async function loadCafciRendimientos() {
-  const statusEl = document.getElementById('cafci-status');
-  const rowEl    = document.getElementById('cafci-row');
-  statusEl.textContent = 'Cargando datos CAFCI…';
+// ── Rendimiento implícito por plazo (desde holdings) ─────
+function matStrToDate(str) {
+  if (!str) return null;
+  const M = {ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
+  let m;
+  m = str.match(/^(\d{1,2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  m = str.match(/^([A-Za-z]{3})\s+(\d{2,4})$/i);
+  if (m) { const mo = M[m[1].toLowerCase()]; const yr = m[2].length===2 ? 2020+ +m[2] : +m[2]; if (mo) return new Date(yr, mo-1, 15); }
+  m = str.match(/^(\d{4})\+?$/);
+  if (m) return new Date(+m[1], 6, 1);
+  return null;
+}
+
+function buildRendimientosPlazo(holdings, nav) {
+  const now   = Date.now();
+  const MSCAL = 86400e3 * 365;
+
+  // Enrich holdings with días al vencimiento y TIR implícita
+  const items = holdings.filter(r => r.isIndividual && r.monto !== 0).map(r => {
+    const mat     = extractMaturity(r.ticker) || parseDateFromName(r.instrumento);
+    const matDate = mat ? matStrToDate(mat.dateStr) : null;
+    const dias    = matDate ? (matDate.getTime() - now) / 86400e3 : null;
+
+    // TIR sólo para instrumentos con payoff ~100 en ARS (tasa fija, bullet)
+    // Excluir: CER (precio>>100 por ajuste), USD linked, Hard USD, precio>110
+    const isCER = /cer|ajust|boncer|bonx|tzx/i.test(r.clasificacion + ' ' + r.ticker);
+    const isUSD = USD_L_CATS.has(r.clasificacion) || HARD_CATS.has(r.clasificacion);
+    const tirEA = (!isCER && !isUSD && dias > 1 && r.precio > 0 && r.precio <= 110)
+      ? Math.pow(100 / r.precio, 365 / dias) - 1
+      : null;
+
+    return { ...r, dias, tirEA, pct: r.monto / nav * 100 };
+  });
+
+  // Buckets por plazo
+  const BUCKETS = [
+    { label: '< 3M',  max: 90  },
+    { label: '3–6M',  max: 180 },
+    { label: '6–12M', max: 365 },
+    { label: '1–2A',  max: 730 },
+    { label: '> 2A',  max: Infinity },
+  ];
+
+  const buckets = BUCKETS.map(b => ({ ...b, pct:0, monto:0, tirW:0, tirM:0, count:0 }));
+
+  items.forEach(r => {
+    if (r.dias === null || r.dias <= 0) return;
+    const b = buckets.find(b => r.dias <= b.max) || buckets[buckets.length-1];
+    b.pct   += r.pct;
+    b.monto += r.monto;
+    b.count++;
+    if (r.tirEA !== null) { b.tirW += r.tirEA * r.monto; b.tirM += r.monto; }
+  });
+
+  const active = buckets.filter(b => b.pct > 0.05);
+
+  // TIR media pond. del portfolio (sólo tasa fija ARS)
+  const allTFItems = items.filter(r => r.tirEA !== null);
+  const tfW = allTFItems.reduce((s,r) => s + r.tirEA * r.monto, 0);
+  const tfM = allTFItems.reduce((s,r) => s + r.monto, 0);
+  const tirMedia = tfM > 0 ? tfW / tfM : null;
+  const tfPct    = tfM / nav * 100;
+
+  const el = document.getElementById('rend-plazos');
+  if (!el) return;
+
+  el.innerHTML = active.map(b => {
+    const tir = b.tirM > 0 ? b.tirW / b.tirM : null;
+    return `<div class="card">
+      <div class="card-title">${b.label}</div>
+      <div class="card-val c-gold">${b.pct.toFixed(1)}%</div>
+      <div class="card-sub">${tir !== null
+        ? `<span style="color:var(--green)">${(tir*100).toFixed(1)}% TIR EA</span>`
+        : fmtMM(b.monto)}</div>
+    </div>`;
+  }).join('') + (tirMedia !== null ? `
+    <div class="card" style="border-left:2px solid var(--green)">
+      <div class="card-title">TIR Media — Tasa Fija</div>
+      <div class="card-val c-green">${(tirMedia*100).toFixed(1)}%</div>
+      <div class="card-sub">EA pond. · ${tfPct.toFixed(1)}% PN</div>
+    </div>` : '');
+}
+
+// ── CAFCI VCP Clase D (secundario, puede fallar) ──────────
+async function loadCafciVCP() {
+  const bar = document.getElementById('cafci-bar');
+  if (!bar) return;
+  bar.innerHTML = '<span style="color:var(--muted)">VCP CAFCI: cargando…</span>';
   try {
-    const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
+    const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'default' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf  = await res.arrayBuffer();
     const wb   = XLSX.read(buf, { type: 'array' });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    const row  = rows.find(r => typeof r[0] === 'string' &&
-                                r[0].toLowerCase().includes('toronto trust renta fija plus') &&
-                                r[0].toLowerCase().includes('clase d'));
-    if (!row) throw new Error('Clase D no encontrada');
-
-    // Columnas según planilla CAFCI pb_get (verificado 04/05/26)
-    // 0=nombre, 1=moneda, 4=fecha, 5=VCP_hoy, 6=VCP_ayer,
-    // 7=rend_dia%, 10=rend_mes%, 11=rend_año%, 14=patrimonio
-    const fecha    = row[4]  ?? '—';
-    const vcp      = typeof row[5]  === 'number' ? row[5].toLocaleString('es-AR', {minimumFractionDigits:3, maximumFractionDigits:3}) : '—';
-    const dia      = typeof row[7]  === 'number' ? row[7].toFixed(2)  : '—';
-    const mes      = typeof row[10] === 'number' ? row[10].toFixed(2) : '—';
-    const anio     = typeof row[11] === 'number' ? row[11].toFixed(2) : '—';
-    const patrim   = typeof row[14] === 'number' ? fmtMM(row[14])     : '—';
-    const diaCol   = parseFloat(dia) >= 0 ? 'c-green' : 'c-red';
-    const mesCol   = parseFloat(mes) >= 0 ? 'c-green' : 'c-red';
-    const anioCol  = parseFloat(anio)>= 0 ? 'c-green' : 'c-red';
-
-    rowEl.innerHTML = `
-      <div class="card">
-        <div class="card-title">Cuotaparte Clase D</div>
-        <div class="card-val c-gold">$${vcp}</div>
-        <div class="card-sub">${fecha}</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Rend. Día</div>
-        <div class="card-val ${diaCol}">${dia}%</div>
-        <div class="card-sub">vs ayer</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Rend. Mes</div>
-        <div class="card-val ${mesCol}">${mes}%</div>
-        <div class="card-sub">mes calendario</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Rend. Año</div>
-        <div class="card-val ${anioCol}">${anio}%</div>
-        <div class="card-sub">año calendario</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Patrimonio Clase D</div>
-        <div class="card-val c-blue">${patrim}</div>
-        <div class="card-sub">ARS</div>
+    const row  = rows.find(r => typeof r[0]==='string'
+      && r[0].toLowerCase().includes('toronto trust renta fija plus')
+      && r[0].toLowerCase().includes('clase d'));
+    if (!row) throw new Error('no encontrado');
+    // Columnas verificadas 04/05/26:
+    // 4=fecha  5=VCP_hoy  7=rend_dia%  10=rend_YTD%  11=rend_12m%  14=patrimonio
+    const fecha = row[4] ?? '—';
+    const vcp   = typeof row[5]  === 'number' ? row[5].toLocaleString('es-AR',{minimumFractionDigits:3}) : '—';
+    const dia   = typeof row[7]  === 'number' ? row[7].toFixed(2) + '%' : '—';
+    const ytd   = typeof row[10] === 'number' ? row[10].toFixed(2) + '%' : '—';
+    const m12   = typeof row[11] === 'number' ? row[11].toFixed(2) + '%' : '—';
+    const pat   = typeof row[14] === 'number' ? fmtMM(row[14]) : '—';
+    bar.innerHTML = `
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;
+                  font-size:11px;background:var(--surf2);border:1px solid var(--border);
+                  padding:10px 16px">
+        <span style="font-size:8px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase">CAFCI Clase D · ${fecha}</span>
+        <span>VCP <strong style="color:var(--gold)">$${vcp}</strong></span>
+        <span>Día <strong style="color:${parseFloat(dia)>=0?'var(--green)':'var(--red)'}">${dia}</strong></span>
+        <span>YTD <strong style="color:var(--text)">${ytd}</strong></span>
+        <span>12M <strong style="color:var(--text)">${m12}</strong></span>
+        <span>PN <strong style="color:var(--blue)">${pat}</strong></span>
       </div>`;
-    statusEl.textContent = `Fuente: CAFCI · ${fecha}`;
   } catch(e) {
-    rowEl.innerHTML = '';
-    statusEl.textContent = `No se pudieron cargar datos CAFCI (${e.message})`;
+    bar.innerHTML = `<span style="font-size:9px;color:var(--muted)">CAFCI no disponible (${e.message})</span>`;
   }
 }
 
