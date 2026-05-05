@@ -597,22 +597,47 @@ function extractMaturity(ticker) {
 }
 
 function renderMaturity(holdings, nav) {
+  const CUTOFF = 202712; // último mes individual: Dic 2027
+
   const items = holdings
     .filter(r => r.isIndividual)
     .map(r => {
       const mat = extractMaturity(r.ticker);
       if (!mat) return null;
-      return { ...mat, pct: r.monto / nav * 100, ticker: r.ticker, clasificacion: r.clasificacion };
+      const is2028p = mat.sortKey > CUTOFF;
+      return {
+        sortKey: is2028p ? 999999 : mat.sortKey,
+        label:   is2028p ? '2028+' : mat.label,
+        dateStr: mat.dateStr,
+        pct: r.monto / nav * 100,
+        ticker: r.ticker,
+        clasificacion: r.clasificacion,
+      };
     })
     .filter(Boolean);
   if (items.length === 0) return;
 
-  // Sorted unique month labels
-  const monthMap = new Map();
-  items.forEach(it => monthMap.set(it.sortKey, it.label));
-  const labels = [...monthMap.entries()].sort((a,b)=>a[0]-b[0]).map(([,l])=>l);
+  // Build full month timeline: first actual maturity → Dic 2027
+  const realKeys = items.filter(it => it.sortKey !== 999999).map(it => it.sortKey);
+  const minKey   = Math.min(...realKeys);
+  const timeline = [];
+  for (let sk = minKey; sk <= CUTOFF; ) {
+    const y = Math.floor(sk / 100), mo = sk % 100;
+    timeline.push({ sortKey: sk, label: `${MNAME[mo]} ${String(y).slice(2)}` });
+    sk = mo === 12 ? (y + 1) * 100 + 1 : y * 100 + (mo + 1);
+  }
+  if (items.some(it => it.sortKey === 999999)) {
+    timeline.push({ sortKey: 999999, label: '2028+' });
+  }
+  const labels = timeline.map(e => e.label);
 
-  // Group by (classification, month)
+  // Sync item labels to canonical timeline labels
+  items.forEach(it => {
+    const entry = timeline.find(e => e.sortKey === it.sortKey);
+    if (entry) it.label = entry.label;
+  });
+
+  // Group by (classification, label)
   const byClass = {};
   items.forEach(it => {
     if (!byClass[it.clasificacion]) byClass[it.clasificacion] = {};
@@ -638,13 +663,13 @@ function renderMaturity(holdings, nav) {
 
   Plotly.newPlot('chart-maturity', traces, {
     ...LAYOUT_BASE,
-    height: 280,
+    height: 300,
     barmode: 'stack',
-    bargap: 0.28,
-    xaxis: { gridcolor: C.border, color: C.text, tickfont:{size:10}, automargin:true },
+    bargap: 0.18,
+    xaxis: { gridcolor: C.border, color: C.text, tickfont:{size:10}, automargin:true, tickangle: -30 },
     yaxis: { gridcolor: C.border, ticksuffix:'%', showgrid:true, color:C.muted, automargin:true, rangemode:'tozero' },
     showlegend: true,
-    legend: { orientation:'h', x:0, y:1.14, font:{size:8, color:C.muted}, traceorder:'normal' },
+    legend: { orientation:'h', x:0, y:1.14, font:{size:8, color:C.muted} },
   }, PLOTLY_CFG);
 }
 
