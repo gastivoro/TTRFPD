@@ -554,7 +554,10 @@ function buildHoldings(holdings, nav) {
     return `<tr>
       <td><span class="hticker">${r.ticker}</span></td>
       <td><span class="hinstr" title="${instr}">${instr}</span></td>
-      <td><span class="htipo" style="color:${color}">${r.clasificacion}</span></td>
+      <td>
+        <span class="htipo" style="color:${color}">${r.clasificacion}</span>
+        ${ON_EMISOR[r.ticker.toUpperCase()] ? `<br><span style="font-size:8px;color:var(--blue);letter-spacing:.06em">${ON_EMISOR[r.ticker.toUpperCase()]}</span>` : ''}
+      </td>
       <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtVN(r.vn)}</td>
       <td>
         <div class="hbar-wrap">
@@ -574,6 +577,21 @@ const MNAME = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','N
 // Tickers sin código de mes estándar — fecha conocida hardcodeada
 const TICKER_DATES = {
   'TZV28': { sortKey:202806, label:'Jun 28', dateStr:'30/06/2028' },
+  'TZV27': { sortKey:202712, label:'Dic 27', dateStr:'Dic 2027'   },
+  'GD30':  { sortKey:203001, label:'2028+',  dateStr:'2030'        },
+  'GD38':  { sortKey:203801, label:'2028+',  dateStr:'2038'        },
+  'AL30':  { sortKey:203001, label:'2028+',  dateStr:'2030'        },
+  'BPOC7': { sortKey:202712, label:'2028+',  dateStr:'2027+'       },
+};
+
+// Emisores de ONs corporativas
+const ON_EMISOR = {
+  'TLCLO': 'Telecom',      'TLCDO': 'Telecom',
+  'YMCWO': 'YPF',          'YMCTO': 'YPF',
+  'PNRCO': 'Pan American', 'PN40O': 'Pan American',
+  'VSCMO': 'Vista Oil',
+  'CS46O': 'Cresud',       'CS42O': 'Cresud',
+  'MR36O': 'Med. & Roca',
 };
 
 function extractMaturity(ticker) {
@@ -590,10 +608,11 @@ function extractMaturity(ticker) {
       dateStr: `${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}/${year}`,
     };
   }
-  // TTJ26, TTS26, TTD26, TMF27, TMG27, TMF28 → [2-3-char-prefix][month][2-digit-year]
-  m = ticker.match(/^[A-Z]{2,3}([EFMAYLGSOND])(\d{2})$/i);
+  // TTJ26, TTS26, TZXM6, TZXD7 → [2-4-char-prefix][month][1-or-2-digit-year]
+  m = ticker.match(/^[A-Z]{2,4}([EFMAYLGSOND])(\d{1,2})$/i);
   if (m && MCODE[m[1].toUpperCase()]) {
-    const mon = MCODE[m[1].toUpperCase()], year = 2000 + parseInt(m[2]);
+    const mon  = MCODE[m[1].toUpperCase()];
+    const year = m[2].length === 1 ? 2020 + parseInt(m[2]) : 2000 + parseInt(m[2]);
     return {
       sortKey: year * 100 + mon,
       label:   `${MNAME[mon]} ${String(year).slice(2)}`,
