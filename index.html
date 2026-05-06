@@ -10,136 +10,170 @@
   <style>
     :root {
       --gold:    #c9a84c;
-      --gold-d:  #a07830;
-      --blue:    #5b8fe8;
-      --green:   #3ec97a;
-      --red:     #e05555;
-      --purple:  #9b59b6;
-      --orange:  #e8873a;
-      --gray:    #8899aa;
-      --bg:      #080b12;
-      --surf:    #0e1118;
-      --surf2:   #131824;
-      --border:  #1c2333;
-      --border2: #252e42;
-      --text:    #dde3f0;
-      --text2:   #9aaabb;
-      --muted:   #556070;
+      --gold-d:  #8a6c28;
+      --blue:    #4e82d8;
+      --green:   #35b86c;
+      --red:     #d44;
+      --purple:  #8e52c8;
+      --orange:  #d97c2e;
+      --gray:    #7a8fa0;
+      --bg:      #06080f;
+      --surf:    #0b0e18;
+      --surf2:   #10141f;
+      --surf3:   #151b2a;
+      --border:  #192030;
+      --border2: #1f2c40;
+      --text:    #d8e0ef;
+      --text2:   #8a9db5;
+      --muted:   #4a5870;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
       background: var(--bg); color: var(--text);
       font-family: 'DM Mono', monospace;
-      min-height: 100vh; padding: 28px 40px;
-      font-size: 12px; line-height: 1.5;
+      min-height: 100vh; padding: 32px 48px;
+      font-size: 12px; line-height: 1.55;
     }
 
-    /* ── Upload screen ── */
+    /* ── Upload screen ────────────────────────────────────── */
     #upload-screen {
       display: flex; flex-direction: column; align-items: center;
-      justify-content: center; min-height: 85vh; gap: 28px;
+      justify-content: center; min-height: 92vh; gap: 40px;
     }
-    .upload-brand {
-      text-align: center;
+    .upload-brand { text-align: center; }
+    .upload-eyebrow {
+      font-size: 9px; color: var(--muted); letter-spacing: .28em;
+      text-transform: uppercase; margin-bottom: 14px;
     }
     .upload-brand .brand-main {
-      font-family: 'DM Sans', sans-serif; font-size: 30px; font-weight: 700;
-      letter-spacing: -.5px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 34px; font-weight: 700;
+      letter-spacing: -.6px; color: var(--text); line-height: 1.1;
     }
     .upload-brand .brand-main span { color: var(--gold); }
     .upload-brand .brand-sub {
-      font-size: 10px; color: var(--muted); letter-spacing: .18em;
-      text-transform: uppercase; margin-top: 4px;
+      font-size: 9px; color: var(--muted); letter-spacing: .18em;
+      text-transform: uppercase; margin-top: 8px;
+    }
+    .upload-divider {
+      width: 40px; height: 1px; background: var(--border2); margin: 0 auto 4px;
     }
     .drop-zone {
-      width: 440px; border: 1px dashed var(--border2); background: var(--surf);
-      border-radius: 6px; padding: 48px 32px; text-align: center;
-      cursor: pointer; transition: border-color .2s, background .2s;
+      width: 460px; border: 1px solid var(--border2); background: var(--surf);
+      border-radius: 4px; padding: 52px 40px; text-align: center;
+      cursor: pointer; transition: border-color .18s, background .18s, box-shadow .18s;
       position: relative;
     }
     .drop-zone:hover, .drop-zone.drag-over {
-      border-color: var(--gold); background: rgba(201,168,76,.04);
+      border-color: var(--gold);
+      background: rgba(201,168,76,.03);
+      box-shadow: 0 0 0 1px rgba(201,168,76,.12), 0 8px 32px rgba(0,0,0,.4);
     }
     .drop-zone input[type=file] {
       position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
     }
-    .drop-icon { font-size: 32px; margin-bottom: 14px; opacity: .35; }
-    .drop-label { font-size: 11px; color: var(--text2); letter-spacing: .14em; text-transform: uppercase; }
-    .drop-sub   { font-size: 10px; color: var(--muted); margin-top: 6px; }
-    .upload-err { font-size: 10px; color: var(--red); }
+    .drop-icon { font-size: 28px; margin-bottom: 16px; opacity: .3; }
+    .drop-label {
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+      color: var(--text2); letter-spacing: .02em;
+    }
+    .drop-sub { font-size: 9px; color: var(--muted); margin-top: 8px; letter-spacing: .06em; }
+    .drop-hint {
+      margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border);
+      display: flex; gap: 18px; justify-content: center; flex-wrap: wrap;
+    }
+    .drop-hint-item { font-size: 8px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+    .drop-hint-item span { color: var(--text2); }
+    .upload-err { font-size: 10px; color: var(--red); margin-top: -16px; }
 
-    /* ── Dashboard ── */
-    #dashboard { display: none; max-width: 1440px; margin: 0 auto; }
+    /* ── Dashboard ────────────────────────────────────────── */
+    #dashboard { display: none; max-width: 1520px; margin: 0 auto; }
 
-    /* Header */
+    /* Sticky topbar */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(6,8,15,.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 24px; margin: -32px -48px 28px; gap: 24px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .topbar-name {
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700;
+      color: var(--text); letter-spacing: -.2px;
+    }
+    .topbar-name span { color: var(--gold); }
+    .topbar-right { display: flex; align-items: center; gap: 20px; }
+    .topbar-stat { text-align: right; }
+    .topbar-stat-val { font-size: 14px; font-weight: 600; color: var(--gold); }
+    .topbar-stat-lbl { font-size: 8px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-top: 1px; }
+    .tb-div { width: 1px; height: 28px; background: var(--border); }
+
+    /* Tags / pills */
+    .tag {
+      display: inline-flex; align-items: center;
+      background: rgba(201,168,76,.08); border: 1px solid rgba(201,168,76,.18); color: var(--gold);
+      font-size: 7.5px; padding: 2px 9px; letter-spacing: .16em;
+      text-transform: uppercase; border-radius: 2px;
+    }
+
+    /* Main header */
     .header {
-      display: flex; justify-content: space-between; align-items: stretch;
       background: var(--surf); border: 1px solid var(--border);
-      border-left: 3px solid var(--gold);
-      padding: 20px 24px; margin-bottom: 28px;
-      gap: 24px;
+      border-left: 4px solid var(--gold);
+      padding: 22px 28px; margin-bottom: 28px; display: flex;
+      justify-content: space-between; align-items: center; gap: 32px;
     }
     .header-left { flex: 1; }
     .header-title {
-      font-family: 'DM Sans', sans-serif; font-size: 22px; font-weight: 700;
-      letter-spacing: -.3px; line-height: 1.2; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 24px; font-weight: 700;
+      letter-spacing: -.4px; line-height: 1.2; color: var(--text);
     }
     .header-title span { color: var(--gold); }
     .header-sub {
-      font-size: 9px; color: var(--muted); letter-spacing: .08em;
-      text-transform: uppercase; margin: 6px 0 10px;
+      font-size: 9px; color: var(--muted); letter-spacing: .09em;
+      text-transform: uppercase; margin: 7px 0 12px;
     }
-    .tag {
-      display: inline-block; background: rgba(201,168,76,.1);
-      border: 1px solid rgba(201,168,76,.22); color: var(--gold);
-      font-size: 8px; padding: 2px 8px; letter-spacing: .14em;
-      text-transform: uppercase; margin-right: 6px; border-radius: 2px;
-    }
-    .header-right {
-      display: flex; gap: 1px; align-items: stretch;
-    }
+    .header-right { display: flex; gap: 0; align-items: stretch; }
     .hstat {
       display: flex; flex-direction: column; justify-content: center;
-      padding: 0 24px; border-left: 1px solid var(--border); text-align: right;
+      padding: 0 28px; border-left: 1px solid var(--border); text-align: right;
     }
-    .hstat-val  { font-size: 22px; font-weight: 600; line-height: 1.1; color: var(--gold); }
-    .hstat-lbl  { font-size: 8px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-top: 3px; }
-    .hstat-sub  { font-size: 11px; color: var(--text2); margin-top: 4px; }
+    .hstat-val  { font-size: 24px; font-weight: 600; line-height: 1.1; color: var(--gold); letter-spacing: -.5px; }
+    .hstat-lbl  { font-size: 8px; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; margin-top: 4px; }
+    .hstat-sub  { font-size: 12px; color: var(--text2); margin-top: 4px; }
 
     /* Section divider */
     .sec {
-      font-size: 8px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase;
-      color: var(--muted); margin: 32px 0 14px;
-      display: flex; align-items: center; gap: 10px;
+      font-size: 8px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase;
+      color: var(--muted); margin: 36px 0 16px;
+      display: flex; align-items: center; gap: 12px;
     }
-    .sec::before { content:''; width:2px; height:11px; background:var(--gold); border-radius:1px; flex-shrink:0; }
-    .sec::after  { content:''; flex:1; height:1px; background:var(--border); }
+    .sec::before { content:''; width: 3px; height: 12px; background: var(--gold); border-radius: 2px; flex-shrink: 0; }
+    .sec::after  { content:''; flex: 1; height: 1px; background: var(--border); }
 
     /* Cards */
     .cards { display: grid; gap: 10px; }
-    .cards-7   { grid-template-columns: repeat(7, 1fr); }
-    .cards-5   { grid-template-columns: repeat(5, 1fr); }
-    .cards-4   { grid-template-columns: repeat(4, 1fr); }
-    .cards-dyn { display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; gap: 10px; }
+    .cards-7 { grid-template-columns: repeat(7, 1fr); }
+    .cards-4 { grid-template-columns: repeat(4, 1fr); }
     .card {
       background: var(--surf); border: 1px solid var(--border);
       border-top: 2px solid var(--border2);
-      padding: 16px 18px; position: relative; overflow: hidden;
-      transition: border-color .15s;
+      padding: 18px 20px; position: relative; overflow: hidden;
+      transition: border-color .15s, box-shadow .15s;
     }
-    .card:hover { border-color: var(--border2); }
+    .card:hover { border-color: var(--border2); box-shadow: 0 4px 20px rgba(0,0,0,.3); }
     .card-title {
-      font-size: 8px; letter-spacing: .18em; text-transform: uppercase;
-      color: var(--muted); margin-bottom: 10px;
+      font-size: 8px; letter-spacing: .2em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 12px;
     }
-    .card-val  { font-size: 19px; font-weight: 600; line-height: 1; letter-spacing: -.3px; }
-    .card-sub  { font-size: 9px; color: var(--muted); margin-top: 5px; }
-    .c-gold   { color: var(--gold); }
-    .c-red    { color: var(--red); }
-    .c-green  { color: var(--green); }
-    .c-blue   { color: var(--blue); }
-    .c-empty  { color: var(--border2); }
+    .card-val  { font-size: 20px; font-weight: 600; line-height: 1; letter-spacing: -.4px; }
+    .card-sub  { font-size: 9px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+    .c-gold  { color: var(--gold); }
+    .c-red   { color: var(--red); }
+    .c-green { color: var(--green); }
+    .c-blue  { color: var(--blue); }
+    .c-empty { color: var(--border2); }
 
     /* 2-col layout */
     .row-2   { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
@@ -152,97 +186,90 @@
     }
     .chart-lbl {
       font-size: 8px; color: var(--muted); letter-spacing: .18em;
-      text-transform: uppercase; padding: 12px 16px 0;
+      text-transform: uppercase; padding: 14px 18px 0;
     }
 
     /* ARS sidebar */
-    .ars-side {
-      display: flex; flex-direction: column;
-      background: var(--surf); border: 1px solid var(--border);
-    }
+    .ars-side { display: flex; flex-direction: column; background: var(--surf); border: 1px solid var(--border); }
     .ars-item {
-      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
     }
-    .ars-item-left { display: flex; align-items: center; gap: 10px; }
-    .ars-dot { width: 3px; height: 32px; border-radius: 2px; flex-shrink: 0; }
+    .ars-item-left { display: flex; align-items: center; gap: 12px; }
+    .ars-dot { width: 3px; height: 34px; border-radius: 2px; flex-shrink: 0; }
     .ars-item-label { font-size: 8px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
-    .ars-item-pct   { font-size: 16px; font-weight: 600; font-family: 'DM Mono', monospace; }
+    .ars-item-pct   { font-size: 17px; font-weight: 600; font-family: 'DM Mono', monospace; }
     .ars-item-val   { font-size: 9px; color: var(--muted); margin-top: 2px; }
     .ars-total {
-      padding: 12px 16px;
-      display: flex; justify-content: space-between; align-items: center;
-      background: rgba(201,168,76,.05);
+      padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
+      background: rgba(201,168,76,.04); border-top: 1px solid rgba(201,168,76,.12);
     }
     .ars-total-lbl { font-size: 8px; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
     .ars-total-val { font-size: 22px; font-weight: 700; color: var(--gold); }
 
     /* Holdings table */
-    .htable-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 2px; }
-    table.htable { width: 100%; border-collapse: collapse; font-size: 11px; background: var(--surf); }
+    .htable-wrap { overflow-x: auto; border: 1px solid var(--border); }
+    table.htable { width: 100%; border-collapse: collapse; font-size: 11.5px; background: var(--surf); }
     table.htable th {
       background: var(--surf2); color: var(--muted); font-size: 8px;
-      letter-spacing: .18em; text-transform: uppercase; padding: 12px 14px;
-      text-align: left; border-bottom: 2px solid var(--border2); white-space: nowrap;
+      letter-spacing: .2em; text-transform: uppercase; padding: 13px 16px;
+      text-align: left; border-bottom: 1px solid var(--border2); white-space: nowrap;
       position: sticky; top: 0; z-index: 1;
     }
-    table.htable td { padding: 10px 14px; border-bottom: 1px solid rgba(28,35,51,.8); vertical-align: middle; }
+    table.htable td {
+      padding: 11px 16px; border-bottom: 1px solid var(--border); vertical-align: middle;
+    }
+    table.htable tbody tr:nth-child(even) td { background: rgba(255,255,255,.012); }
     table.htable tbody tr:last-child td { border-bottom: none; }
-    table.htable tbody tr:hover td { background: rgba(201,168,76,.04); cursor: default; }
-    .hticker { font-weight: 700; color: var(--gold); letter-spacing: .06em; font-size: 12px; }
-    .hinstr  { color: var(--text2); font-size: 10px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .htipo   { display: inline-block; font-size: 8px; letter-spacing: .07em; border-radius: 2px;
-               background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
-               padding: 2px 8px; white-space: nowrap; }
-    .hemit   { display: inline-block; font-size: 8px; letter-spacing: .06em; border-radius: 2px;
-               padding: 2px 7px; margin-top: 3px; white-space: nowrap; font-weight: 500; }
-    .hvcto   { font-size: 9px; color: var(--text2); white-space: nowrap; }
-    .hnoms   { font-size: 10px; color: var(--text2); font-variant-numeric: tabular-nums; text-align: right; }
+    table.htable tbody tr:hover td { background: rgba(201,168,76,.05); transition: background .1s; }
+    .hticker { font-weight: 700; color: var(--gold); letter-spacing: .06em; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .hinstr  { color: var(--text2); font-size: 10px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .htipo   {
+      display: inline-block; font-size: 7.5px; letter-spacing: .07em; border-radius: 2px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+      padding: 2px 8px; white-space: nowrap;
+    }
+    .hemit {
+      display: inline-block; font-size: 7.5px; letter-spacing: .06em; border-radius: 2px;
+      padding: 2px 7px; margin-top: 4px; white-space: nowrap; font-weight: 600;
+    }
+    .hvcto   { font-size: 9.5px; color: var(--text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .hbar-wrap { display: flex; align-items: center; gap: 8px; }
-    .hbar    { height: 4px; border-radius: 2px; flex-shrink: 0; }
-    .hpct    { font-weight: 600; white-space: nowrap; font-size: 11px; }
-    .hmonto  { font-size: 10px; color: var(--text2); text-align: right; white-space: nowrap; }
+    .hbar    { height: 3px; border-radius: 2px; flex-shrink: 0; }
+    .hpct    { font-weight: 600; white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .hmonto  { font-size: 10px; color: var(--text2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-    /* Reload button */
+    /* Action button */
     .reload-btn {
       background: transparent; border: 1px solid var(--border2); color: var(--muted);
       font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: .15em;
-      text-transform: uppercase; padding: 7px 14px; cursor: pointer; border-radius: 2px;
-      transition: border-color .2s, color .2s;
+      text-transform: uppercase; padding: 8px 16px; cursor: pointer; border-radius: 2px;
+      transition: border-color .18s, color .18s, background .18s;
     }
-    .reload-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .reload-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,.04); }
 
     /* Footer */
     .footer {
-      margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border);
+      margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border);
       display: flex; justify-content: space-between;
       font-size: 9px; color: var(--muted); letter-spacing: .06em;
     }
     .watermark {
       position: fixed; bottom: 14px; right: 20px;
-      font-size: 8px; color: rgba(85,96,112,.25);
+      font-size: 8px; color: rgba(74,88,112,.2);
       letter-spacing: .14em; pointer-events: none; text-transform: uppercase;
     }
 
-    /* Two-up upload */
-    .upload-row { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
-    .drop-zone-opt { opacity: .6; }
-
-    /* ONs DL/HD grid */
-    .ons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .ons-sub-lbl { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 8px; font-weight: 500; }
-
-    @media (max-width: 1100px) {
+    @media (max-width: 1200px) {
+      body { padding: 20px 24px; }
+      .topbar { margin: -20px -24px 24px; }
       .cards-7 { grid-template-columns: repeat(4, 1fr); }
       .row-2, .row-3-1 { grid-template-columns: 1fr; }
     }
-    @media (max-width: 900px) {
-      .ons-grid { grid-template-columns: 1fr; }
-    }
     @media (max-width: 700px) {
       body { padding: 16px; }
+      .topbar { margin: -16px -16px 20px; padding: 10px 16px; }
       .cards-7 { grid-template-columns: repeat(2, 1fr); }
-      .cards-5 { grid-template-columns: repeat(2, 1fr); }
       .cards-4 { grid-template-columns: repeat(2, 1fr); }
       .drop-zone { width: 100%; }
     }
@@ -253,21 +280,21 @@
 <!-- Upload screen -->
 <div id="upload-screen">
   <div class="upload-brand">
-    <div class="brand-main">Toronto Trust <span>Renta Fija Plus</span></div>
-    <div class="brand-sub">Informe de Gestión · Administrador: Calderon Belisario</div>
+    <div class="upload-eyebrow">Toronto Trust · Dashboard de Gestión</div>
+    <div class="upload-divider"></div>
+    <div class="brand-main">Renta Fija <span>Plus</span></div>
+    <div class="brand-sub">Administrador: Calderon Belisario · CNV Reg.</div>
   </div>
-  <div class="upload-row">
-    <div class="drop-zone" id="drop-zone">
-      <input type="file" id="file-input" accept=".xlsx,.xls">
-      <div class="drop-icon">📂</div>
-      <div class="drop-label">Detalle Cartera</div>
-      <div class="drop-sub">Requerido · Detalle Cartera TTRFP al DD.MM.AAAA.xlsx</div>
-    </div>
-    <div class="drop-zone drop-zone-opt" id="drop-zone-informe">
-      <input type="file" id="file-input-informe" accept=".xlsx,.xls">
-      <div class="drop-icon">📋</div>
-      <div class="drop-label">Informe de Gestión</div>
-      <div class="drop-sub">Opcional · ROFEX y Obligaciones Negociables</div>
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".xlsx,.xls">
+    <div class="drop-icon">📂</div>
+    <div class="drop-label">Cargar Detalle de Cartera</div>
+    <div class="drop-sub">Arrastrá o hacé clic — .xlsx / .xls</div>
+    <div class="drop-hint">
+      <div class="drop-hint-item">Cartera <span>✓</span></div>
+      <div class="drop-hint-item">Composición <span>✓</span></div>
+      <div class="drop-hint-item">Vencimientos <span>✓</span></div>
+      <div class="drop-hint-item">Balance <span>✓</span></div>
     </div>
   </div>
   <div class="upload-err" id="upload-err"></div>
@@ -277,13 +304,35 @@
 <div id="dashboard">
   <div class="watermark">ANÁLISIS INTERNO · CONFIDENCIAL</div>
 
+  <!-- Topbar sticky -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-name">Toronto Trust <span>Renta Fija Plus</span></div>
+      <span class="tag">FCI Renta Fija</span>
+      <span class="tag">CNV</span>
+      <span class="tag">ARS</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-stat">
+        <div class="topbar-stat-val" id="tb-nav">—</div>
+        <div class="topbar-stat-lbl">Patrimonio Neto</div>
+      </div>
+      <div class="tb-div"></div>
+      <div class="topbar-stat">
+        <div class="topbar-stat-val" id="tb-date" style="color:var(--text2)">—</div>
+        <div class="topbar-stat-lbl">Fecha</div>
+      </div>
+      <div class="tb-div"></div>
+      <button class="reload-btn" onclick="resetDashboard()">↑ Nuevo archivo</button>
+    </div>
+  </div>
+
   <div class="header">
     <div class="header-left">
       <div class="header-title">Toronto Trust <span>Renta Fija Plus</span></div>
-      <div class="header-sub" id="h-sub">INFORME DE GESTIÓN · — · ADMINISTRADOR: CALDERON BELISARIO</div>
-      <span class="tag">FCI Renta Fija</span>
-      <span class="tag">CNV Reg.</span>
-      <span class="tag">ARS</span>
+      <div class="header-sub" id="h-sub">DETALLE DE CARTERA · — · ADMINISTRADOR: CALDERON BELISARIO</div>
+      <span class="tag">Renta Fija Total Return</span>
+      <span class="tag">Sesgo ARS</span>
     </div>
     <div class="header-right">
       <div class="hstat">
@@ -293,9 +342,6 @@
       <div class="hstat">
         <div class="hstat-sub" id="h-inv"></div>
         <div class="hstat-lbl">Inversiones</div>
-      </div>
-      <div class="hstat">
-        <button class="reload-btn" onclick="resetDashboard()">↑ Cargar nuevo</button>
       </div>
     </div>
   </div>
@@ -333,22 +379,6 @@
   <!-- Balance -->
   <div class="sec">Estructura del Balance</div>
   <div class="cards cards-4" id="balance-cards"></div>
-
-  <!-- Sector ONs -->
-  <div class="sec">Exposición USD Linked — por Emisor / Sector</div>
-  <div class="sector-grid">
-    <div>
-      <div class="chart-lbl">Distribución por emisor corporativo (% PN)</div>
-      <div class="chart-box"><div id="chart-sector-ons" style="min-height:220px"></div></div>
-    </div>
-    <div id="sector-ons-table" style="padding:4px 0"></div>
-  </div>
-
-  <!-- ONs DL y HD (solo si se cargó el Informe de Gestión) -->
-  <div id="ons-section" style="display:none">
-    <div class="sec">Obligaciones Negociables — DL y HD</div>
-    <div class="ons-grid" id="ons-grid"></div>
-  </div>
 
   <!-- Holdings -->
   <div class="sec">Holdings — Títulos Individuales</div>
@@ -937,12 +967,14 @@ function processWorkbook(wb, fname) {
 
   const date = extractDate(fname);
 
-  // Header
+  // Header + topbar
   document.getElementById('h-sub').textContent =
-    `INFORME DE GESTIÓN · ${date} · ADMINISTRADOR: CALDERON BELISARIO`;
+    `DETALLE DE CARTERA · ${date} · ADMINISTRADOR: CALDERON BELISARIO`;
   document.getElementById('h-nav').textContent = fmtMM(nav);
   document.getElementById('h-inv').textContent = fmtMM(inversiones);
   document.getElementById('footer-fname').textContent = fname;
+  document.getElementById('tb-nav').textContent = fmtMM(nav);
+  document.getElementById('tb-date').textContent = date;
 
   // Sections
   buildKPIs(nav, inversiones, creditos);
@@ -956,7 +988,6 @@ function processWorkbook(wb, fname) {
     renderFX(fx);
     renderARS(arsDetail, nav);
     renderMaturity(holdings, nav);
-    renderSectorONs(holdings, nav);
   }, 80);
 
   // Llena los 6 KPI cards de rendimiento desde CAFCI
@@ -966,10 +997,6 @@ function processWorkbook(wb, fname) {
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
 
-  // Si el Informe de Gestión ya fue cargado antes, renderizarlo ahora
-  if (informeData) {
-    renderONs(informeData.dl, informeData.hd);
-  }
 }
 
 // ── CAFCI — rendimientos Clase D en las KPI cards ─────────
@@ -1064,106 +1091,6 @@ async function loadCafciKPIs() {
   }
 }
 
-// ── Informe de Gestión: ROFEX + ONs DL/HD ────────────────
-let informeData = null;
-
-function parseInforme(data) {
-  const result = { dl: [], hd: [] };
-  let section = null;
-
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    if (!row) continue;
-    const cells = row.map(c => String(c ?? '').trim());
-    const rowStr = cells.join(' ').toUpperCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-    // Section detection (accent-insensitive)
-    if (rowStr.includes('DOLAR LINKED') || rowStr.includes('DOLLAR LINKED')) {
-      section = 'dl'; continue;
-    }
-    if (rowStr.includes('DOLAR MEP') || rowStr.includes('LEY NY') || rowStr.includes('HARD DOLLAR')) {
-      section = 'hd'; continue;
-    }
-    if (!section) continue;
-
-    if (cells.every(c => !c)) continue;
-
-    const c0up = cells[0].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-    if (c0up.startsWith('DENOMINACI') || c0up.startsWith('ISIN') || c0up.startsWith('TICKER')) continue;
-    if (c0up.startsWith('TOTAL') || c0up.startsWith('SUBTOTAL')) continue;
-
-    const hasNum = row.some(c => typeof c === 'number' && Math.abs(c) > 0);
-    if (!hasNum) continue;
-
-    const denominacion = cells[0];
-    const isin         = cells[1] || '';
-    const cantidad     = parseNum(row[2]);
-    const cierre       = parseNum(row[3]);
-    const total        = parseNum(row[4]);
-    if (!denominacion || (Math.abs(cantidad) < 1 && Math.abs(total) < 1)) continue;
-    const tkM = denominacion.match(/^([A-Z0-9]{4,6})\s/i);
-    const ticker = tkM ? tkM[1].toUpperCase() : '';
-    result[section].push({ denominacion, isin, ticker, cantidad, cierre, total });
-  }
-  return result;
-}
-
-
-function renderONs(dl, hd) {
-  const sec = document.getElementById('ons-section');
-  if (!dl.length && !hd.length) return;
-  sec.style.display = '';
-
-  function tableHtml(rows, tipo) {
-    const color = tipo === 'DL' ? C.blue : C.red;
-    const label = tipo === 'DL' ? 'Dólar Linked' : 'Hard Dollar / MEP';
-    if (!rows.length) return `<div>
-      <div class="ons-sub-lbl" style="color:${color}">${tipo} — ${label}</div>
-      <div style="padding:12px;color:var(--muted);font-size:9px">Sin posiciones</div>
-    </div>`;
-    return `<div>
-      <div class="ons-sub-lbl" style="color:${color}">${tipo} — ${label} · ${rows.length} instrumentos</div>
-      <div class="htable-wrap">
-        <table class="htable">
-          <thead><tr>
-            <th>Ticker</th>
-            <th>Denominación</th>
-            <th style="text-align:right">Nominal (VN)</th>
-            <th style="text-align:right">Cierre</th>
-            <th style="text-align:right">Total ARS</th>
-          </tr></thead>
-          <tbody>
-            ${rows.map(r => `<tr>
-              <td><span class="hticker" style="color:${color}">${r.ticker || '—'}</span></td>
-              <td><span class="hinstr" title="${r.denominacion}">${r.denominacion}</span></td>
-              <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtVN(r.cantidad)}</td>
-              <td style="text-align:right">${r.cierre ? r.cierre.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:4}) : '—'}</td>
-              <td class="hmonto">${fmtMM(r.total)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-  }
-
-  document.getElementById('ons-grid').innerHTML =
-    tableHtml(dl, 'DL') + tableHtml(hd, 'HD');
-}
-
-function processInforme(wb) {
-  try {
-    const ws   = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(ws, { header:1, defval: null });
-    informeData = parseInforme(data);
-    if (document.getElementById('dashboard').style.display !== 'none') {
-      renderONs(informeData.dl, informeData.hd);
-    }
-  } catch(ex) {
-    console.error('Informe de Gestión error:', ex);
-  }
-}
-
 // ── File handling ─────────────────────────────────────────
 function handleFile(file) {
   if (!file) return;
@@ -1185,10 +1112,6 @@ function resetDashboard() {
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('upload-screen').style.display = 'flex';
   document.getElementById('file-input').value = '';
-  document.getElementById('file-input-informe').value = '';
-  informeData = null;
-  document.getElementById('ons-section').style.display = 'none';
-  document.getElementById('ons-grid').innerHTML = '';
 }
 
 // File input
@@ -1196,7 +1119,7 @@ document.getElementById('file-input').addEventListener('change', e => {
   handleFile(e.target.files[0]);
 });
 
-// Drag & drop — Detalle Cartera
+// Drag & drop
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
@@ -1204,29 +1127,6 @@ dz.addEventListener('drop', e => {
   e.preventDefault();
   dz.classList.remove('drag-over');
   handleFile(e.dataTransfer.files[0]);
-});
-
-// Informe de Gestión — file input
-document.getElementById('file-input-informe').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => processInforme(XLSX.read(ev.target.result, { type:'array' }));
-  reader.readAsArrayBuffer(file);
-});
-
-// Informe de Gestión — drag & drop
-const dz2 = document.getElementById('drop-zone-informe');
-dz2.addEventListener('dragover', e => { e.preventDefault(); dz2.classList.add('drag-over'); });
-dz2.addEventListener('dragleave', () => dz2.classList.remove('drag-over'));
-dz2.addEventListener('drop', e => {
-  e.preventDefault();
-  dz2.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => processInforme(XLSX.read(ev.target.result, { type:'array' }));
-  reader.readAsArrayBuffer(file);
 });
 </script>
 </body>
