@@ -224,9 +224,20 @@
       letter-spacing: .14em; pointer-events: none; text-transform: uppercase;
     }
 
+    /* Two-up upload */
+    .upload-row { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+    .drop-zone-opt { opacity: .6; }
+
+    /* ONs DL/HD grid */
+    .ons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ons-sub-lbl { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 8px; font-weight: 500; }
+
     @media (max-width: 1100px) {
       .cards-7 { grid-template-columns: repeat(4, 1fr); }
       .row-2, .row-3-1 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .ons-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 700px) {
       body { padding: 16px; }
@@ -245,11 +256,19 @@
     <div class="brand-main">Toronto Trust <span>Renta Fija Plus</span></div>
     <div class="brand-sub">Informe de Gestión · Administrador: Calderon Belisario</div>
   </div>
-  <div class="drop-zone" id="drop-zone">
-    <input type="file" id="file-input" accept=".xlsx,.xls">
-    <div class="drop-icon">📂</div>
-    <div class="drop-label">Subir Excel de cartera</div>
-    <div class="drop-sub">Detalle Cartera TTRFP al DD.MM.AAAA.xlsx</div>
+  <div class="upload-row">
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".xlsx,.xls">
+      <div class="drop-icon">📂</div>
+      <div class="drop-label">Detalle Cartera</div>
+      <div class="drop-sub">Requerido · Detalle Cartera TTRFP al DD.MM.AAAA.xlsx</div>
+    </div>
+    <div class="drop-zone drop-zone-opt" id="drop-zone-informe">
+      <input type="file" id="file-input-informe" accept=".xlsx,.xls">
+      <div class="drop-icon">📋</div>
+      <div class="drop-label">Informe de Gestión</div>
+      <div class="drop-sub">Opcional · ROFEX y Obligaciones Negociables</div>
+    </div>
   </div>
   <div class="upload-err" id="upload-err"></div>
 </div>
@@ -323,6 +342,18 @@
       <div class="chart-box"><div id="chart-sector-ons" style="min-height:220px"></div></div>
     </div>
     <div id="sector-ons-table" style="padding:4px 0"></div>
+  </div>
+
+  <!-- ROFEX (solo si se cargó el Informe de Gestión) -->
+  <div id="rofex-section" style="display:none">
+    <div class="sec">Posición ROFEX</div>
+    <div class="htable-wrap" id="rofex-wrap"></div>
+  </div>
+
+  <!-- ONs DL y HD (solo si se cargó el Informe de Gestión) -->
+  <div id="ons-section" style="display:none">
+    <div class="sec">Obligaciones Negociables — DL y HD</div>
+    <div class="ons-grid" id="ons-grid"></div>
   </div>
 
   <!-- Holdings -->
@@ -940,6 +971,12 @@ function processWorkbook(wb, fname) {
   // Show dashboard
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
+
+  // Si el Informe de Gestión ya fue cargado antes, renderizarlo ahora
+  if (informeData) {
+    renderRofex(informeData.rofex, informeData.rofexHeader);
+    renderONs(informeData.dl, informeData.hd);
+  }
 }
 
 // ── CAFCI — rendimientos Clase D en las KPI cards ─────────
@@ -1034,6 +1071,149 @@ async function loadCafciKPIs() {
   }
 }
 
+// ── Informe de Gestión: ROFEX + ONs DL/HD ────────────────
+let informeData = null;
+
+function parseInforme(data) {
+  const result = { dl: [], hd: [], rofex: [], rofexHeader: null };
+  let section = null;
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (!row) continue;
+    const cells = row.map(c => String(c ?? '').trim());
+    const rowStr = cells.join(' ').toUpperCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, ''); // strip accents for matching
+
+    // Section detection (accent-insensitive)
+    if (rowStr.includes('ROFEX') || rowStr.includes('FUTURO') || rowStr.includes('DERIVADO')) {
+      section = 'rofex'; result.rofexHeader = null; continue;
+    }
+    if (rowStr.includes('DOLAR LINKED') || rowStr.includes('DOLLAR LINKED')) {
+      section = 'dl'; continue;
+    }
+    if (rowStr.includes('DOLAR MEP') || rowStr.includes('LEY NY') || rowStr.includes('HARD DOLLAR')) {
+      section = 'hd'; continue;
+    }
+    // Section terminator heuristic: new bold section header with no numbers
+    // (e.g. "OBLIGACION NEGOCIABLE en PESOS" — excluded by user request, skip)
+    if (!section) continue;
+
+    // Skip empty rows
+    if (cells.every(c => !c)) { continue; }
+
+    // Detect and save header row
+    const c0up = cells[0].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if (c0up.startsWith('DENOMINACI') || c0up.startsWith('CONTRATO') ||
+        c0up.startsWith('ISIN') || c0up.startsWith('TICKER')) {
+      if (section === 'rofex') result.rofexHeader = cells.filter(c => c);
+      continue;
+    }
+    // Skip subtotals/totals
+    if (c0up.startsWith('TOTAL') || c0up.startsWith('SUBTOTAL') || c0up === 'POSICION') continue;
+
+    const hasNum = row.some(c => typeof c === 'number' && Math.abs(c) > 0);
+    if (!hasNum) continue;
+
+    if (section === 'dl' || section === 'hd') {
+      const denominacion = cells[0];
+      const isin         = cells[1] || '';
+      const cantidad     = parseNum(row[2]);
+      const cierre       = parseNum(row[3]);
+      const total        = parseNum(row[4]);
+      if (!denominacion || (Math.abs(cantidad) < 1 && Math.abs(total) < 1)) continue;
+      // Ticker = first word if it looks like a ticker code
+      const tkM = denominacion.match(/^([A-Z0-9]{4,6})\s/i);
+      const ticker = tkM ? tkM[1].toUpperCase() : '';
+      result[section].push({ denominacion, isin, ticker, cantidad, cierre, total });
+    } else if (section === 'rofex') {
+      const nonEmpty = row.filter(c => c !== null && c !== '');
+      if (nonEmpty.length >= 2) result.rofex.push(row.slice(0, 10));
+    }
+  }
+  return result;
+}
+
+function renderRofex(rows, header) {
+  const sec = document.getElementById('rofex-section');
+  if (!rows.length) return;
+  sec.style.display = '';
+
+  const maxCols = Math.max(...rows.map(r => r.filter(c => c !== null && c !== '').length), 2);
+  const hdrs = (header || []).slice(0, maxCols);
+  while (hdrs.length < maxCols) hdrs.push('');
+
+  const thead = hdrs.map(h => `<th>${h}</th>`).join('');
+  const tbody = rows.map(row => {
+    return `<tr>${Array.from({length: maxCols}, (_,i) => {
+      const c = row[i] ?? '';
+      const isNum = typeof row[i] === 'number';
+      const fmt = c === '' || c === null ? '—'
+        : isNum ? row[i].toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2})
+        : String(c);
+      return `<td style="${isNum?'text-align:right;font-variant-numeric:tabular-nums':''}">${fmt}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+
+  document.getElementById('rofex-wrap').innerHTML =
+    `<table class="htable"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+}
+
+function renderONs(dl, hd) {
+  const sec = document.getElementById('ons-section');
+  if (!dl.length && !hd.length) return;
+  sec.style.display = '';
+
+  function tableHtml(rows, tipo) {
+    const color = tipo === 'DL' ? C.blue : C.red;
+    const label = tipo === 'DL' ? 'Dólar Linked' : 'Hard Dollar / MEP';
+    if (!rows.length) return `<div>
+      <div class="ons-sub-lbl" style="color:${color}">${tipo} — ${label}</div>
+      <div style="padding:12px;color:var(--muted);font-size:9px">Sin posiciones</div>
+    </div>`;
+    return `<div>
+      <div class="ons-sub-lbl" style="color:${color}">${tipo} — ${label} · ${rows.length} instrumentos</div>
+      <div class="htable-wrap">
+        <table class="htable">
+          <thead><tr>
+            <th>Ticker</th>
+            <th>Denominación</th>
+            <th style="text-align:right">Nominal (VN)</th>
+            <th style="text-align:right">Cierre</th>
+            <th style="text-align:right">Total ARS</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r => `<tr>
+              <td><span class="hticker" style="color:${color}">${r.ticker || '—'}</span></td>
+              <td><span class="hinstr" title="${r.denominacion}">${r.denominacion}</span></td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtVN(r.cantidad)}</td>
+              <td style="text-align:right">${r.cierre ? r.cierre.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:4}) : '—'}</td>
+              <td class="hmonto">${fmtMM(r.total)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('ons-grid').innerHTML =
+    tableHtml(dl, 'DL') + tableHtml(hd, 'HD');
+}
+
+function processInforme(wb) {
+  try {
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header:1, defval: null });
+    informeData = parseInforme(data);
+    if (document.getElementById('dashboard').style.display !== 'none') {
+      renderRofex(informeData.rofex, informeData.rofexHeader);
+      renderONs(informeData.dl, informeData.hd);
+    }
+  } catch(ex) {
+    console.error('Informe de Gestión error:', ex);
+  }
+}
+
 // ── File handling ─────────────────────────────────────────
 function handleFile(file) {
   if (!file) return;
@@ -1055,6 +1235,12 @@ function resetDashboard() {
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('upload-screen').style.display = 'flex';
   document.getElementById('file-input').value = '';
+  document.getElementById('file-input-informe').value = '';
+  informeData = null;
+  document.getElementById('rofex-section').style.display = 'none';
+  document.getElementById('ons-section').style.display = 'none';
+  document.getElementById('rofex-wrap').innerHTML = '';
+  document.getElementById('ons-grid').innerHTML = '';
 }
 
 // File input
@@ -1062,7 +1248,7 @@ document.getElementById('file-input').addEventListener('change', e => {
   handleFile(e.target.files[0]);
 });
 
-// Drag & drop
+// Drag & drop — Detalle Cartera
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
@@ -1070,6 +1256,29 @@ dz.addEventListener('drop', e => {
   e.preventDefault();
   dz.classList.remove('drag-over');
   handleFile(e.dataTransfer.files[0]);
+});
+
+// Informe de Gestión — file input
+document.getElementById('file-input-informe').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => processInforme(XLSX.read(ev.target.result, { type:'array' }));
+  reader.readAsArrayBuffer(file);
+});
+
+// Informe de Gestión — drag & drop
+const dz2 = document.getElementById('drop-zone-informe');
+dz2.addEventListener('dragover', e => { e.preventDefault(); dz2.classList.add('drag-over'); });
+dz2.addEventListener('dragleave', () => dz2.classList.remove('drag-over'));
+dz2.addEventListener('drop', e => {
+  e.preventDefault();
+  dz2.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => processInforme(XLSX.read(ev.target.result, { type:'array' }));
+  reader.readAsArrayBuffer(file);
 });
 </script>
 </body>
