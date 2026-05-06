@@ -610,12 +610,12 @@ function renderARS(arsRows, nav) {
 // ── DOM builders ──────────────────────────────────────────
 function buildKPIs(nav, inversiones, creditos) {
   const REND = [
-    { lbl:'Último Día', id:'kpi-d1'  },
-    { lbl:'7 Días',     id:'kpi-d7'  },
-    { lbl:'30 Días',    id:'kpi-d30' },
-    { lbl:'60 Días',    id:'kpi-d60' },
-    { lbl:'90 Días',    id:'kpi-d90' },
-    { lbl:'YTD',        id:'kpi-ytd' },
+    { lbl:'Día',  id:'kpi-dia' },
+    { lbl:'MTD',  id:'kpi-mtd' },
+    { lbl:'YTD',  id:'kpi-ytd' },
+    { lbl:'12M',  id:'kpi-m12' },
+    { lbl:'30d',  id:'kpi-d30' },
+    { lbl:'90d',  id:'kpi-d90' },
   ];
   let html = `
     <div class="card">
@@ -628,7 +628,7 @@ function buildKPIs(nav, inversiones, creditos) {
     <div class="card" id="${id}">
       <div class="card-title">${lbl}</div>
       <div class="card-val c-empty" style="font-size:16px">——</div>
-      <div class="card-sub">Cuotaparte D</div>
+      <div class="card-sub">—</div>
     </div>`;
   });
   document.getElementById('kpi-row').innerHTML = html;
@@ -1002,39 +1002,22 @@ function processWorkbook(wb, fname) {
 }
 
 // ── CAFCI — rendimientos Clase D en las KPI cards ─────────
-// pb_get da: día%, YTD%, 12M%. Historial (7/30/60/90d) se acumula en localStorage.
-const VCP_LS = 'ttrfp_vcp_d';
+// pb_get da: día%, MTD%, YTD%, 12M% con fechas de referencia precisas. Historial VCP se acumula en localStorage.
+const VCP_LS = 'ttrfp_vcp_b';
 
 function vcpSerieLoad()  { try { return JSON.parse(localStorage.getItem(VCP_LS) || '[]'); } catch { return []; } }
 function vcpSerieSave(s) { try { localStorage.setItem(VCP_LS, JSON.stringify(s)); } catch {} }
 
 async function loadCafciKPIs() {
   try {
-    let vcpHoy, diaRend, ytd, m12, fecha, fuente;
+    let vcpHoy, dia, mtd, ytd, m12, fecha, fecha_ayer, fecha_mtd, fecha_ytd, fecha_12m, fuente;
 
     if (window.CAFCI_DATA && window.CAFCI_DATA.vcp > 0) {
-      // ── Datos locales (generados por update_cafci.ps1) ──
-      ({ vcp: vcpHoy, dia: diaRend, ytd, m12, fecha } = window.CAFCI_DATA);
+      ({ vcp: vcpHoy, dia, mtd, ytd, m12,
+         fecha, fecha_ayer, fecha_mtd, fecha_ytd, fecha_12m } = window.CAFCI_DATA);
       fuente = `local · ${window.CAFCI_DATA.ts ?? ''}`;
     } else {
-      // ── Fallback: fetch directo (puede fallar por CORS en file://) ──
-      const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const buf  = await res.arrayBuffer();
-      const rows = XLSX.utils.sheet_to_json(
-        XLSX.read(buf, { type:'array' }).Sheets[XLSX.read(buf,{type:'array'}).SheetNames[0]],
-        { header: 1 }
-      );
-      const r = rows.find(x => typeof x[0]==='string'
-        && x[0].toLowerCase().includes('toronto trust renta fija')
-        && x[0].toLowerCase().includes('clase b'));
-      if (!r) throw new Error('Clase B no encontrada');
-      vcpHoy  = r[5];
-      diaRend = r[7];
-      ytd     = r[10];
-      m12     = r[11];
-      fecha   = r[4] ?? '';
-      fuente  = 'live';
+      throw new Error('Ejecutar actualizar_cafci.bat para obtener datos');
     }
 
     // Parsear fecha a ISO (dd/mm/yy o dd/mm/yyyy)
@@ -1067,35 +1050,34 @@ async function loadCafciKPIs() {
       return (vAhora && vAntes) ? (vAhora / vAntes - 1) * 100 : null;
     }
 
-    const r7  = rend(vcpHoy, vcpHaceN(7));
     const r30 = rend(vcpHoy, vcpHaceN(30));
-    const r60 = rend(vcpHoy, vcpHaceN(60));
     const r90 = rend(vcpHoy, vcpHaceN(90));
 
     function fillCard(id, lbl, val, sub) {
       const el = document.getElementById(id);
       if (!el) return;
-      const col = val === null ? 'c-empty' : val >= 0 ? 'c-green' : 'c-red';
-      const txt = val === null ? '——' : val.toFixed(2) + '%';
+      const empty = val == null;
+      const col = empty ? 'c-empty' : val >= 0 ? 'c-green' : 'c-red';
+      const txt = empty ? '——' : val.toFixed(2) + '%';
       el.innerHTML = `
         <div class="card-title">${lbl}</div>
-        <div class="card-val ${col}" style="${val===null ? 'font-size:16px' : ''}">${txt}</div>
+        <div class="card-val ${col}" style="${empty ? 'font-size:16px' : ''}">${txt}</div>
         <div class="card-sub">${sub}</div>`;
     }
 
     const vcpFmt = vcpHoy.toLocaleString('es-AR', { minimumFractionDigits: 0 });
-    fillCard('kpi-d1',  'Último Día', diaRend, `VCP $${vcpFmt} · ${fecha} · ${fuente}`);
-    fillCard('kpi-d7',  '7 Días',     r7,  r7  !== null ? 'Cuotaparte D' : 'sin hist. aún');
-    fillCard('kpi-d30', '30 Días',    r30, r30 !== null ? 'Cuotaparte D' : 'sin hist. aún');
-    fillCard('kpi-d60', '60 Días',    r60, r60 !== null ? 'Cuotaparte D' : 'sin hist. aún');
-    fillCard('kpi-d90', '90 Días',    r90, r90 !== null ? 'Cuotaparte D' : 'sin hist. aún');
-    fillCard('kpi-ytd', 'YTD',        ytd, `Año calendario · ${fecha}`);
+    fillCard('kpi-dia', 'Día',  dia, `vs ${fecha_ayer || 'ayer'} · VCP $${vcpFmt} · ${fuente}`);
+    fillCard('kpi-mtd', 'MTD',  mtd, `desde ${fecha_mtd || '—'} · Clase B`);
+    fillCard('kpi-ytd', 'YTD',  ytd, `desde ${fecha_ytd || '—'} · Clase B`);
+    fillCard('kpi-m12', '12M',  m12, `desde ${fecha_12m || '—'} · Clase B`);
+    fillCard('kpi-d30', '30d',  r30, r30 !== null ? `Clase B · ${fecha}` : 'cargue historial VCP');
+    fillCard('kpi-d90', '90d',  r90, r90 !== null ? `Clase B · ${fecha}` : 'cargue historial VCP');
 
   } catch(e) {
     console.error('CAFCI KPIs:', e);
-    const el = document.getElementById('kpi-d1');
+    const el = document.getElementById('kpi-dia');
     if (el) el.innerHTML = `
-      <div class="card-title">Último Día</div>
+      <div class="card-title">Día</div>
       <div class="card-val c-empty" style="font-size:9px;color:var(--red)">${e.message}</div>
       <div class="card-sub">CAFCI error</div>`;
   }
