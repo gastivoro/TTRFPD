@@ -3,6 +3,9 @@
 *.xls
 *.csv
 
+# Auto-generado por update_cafci.ps1 — contiene datos en tiempo real
+cafci_data.js
+
 # Python artifacts (replaced by index.html)
 app.py
 cafci_test.py

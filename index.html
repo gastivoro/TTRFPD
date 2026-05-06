@@ -7,6 +7,8 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <!-- Datos CAFCI locales generados por update_cafci.ps1 (opcional) -->
+  <script src="cafci_data.js" onerror="window.CAFCI_DATA=null"></script>
   <style>
     :root {
       --gold:    #c9a84c;
@@ -1008,24 +1010,32 @@ function vcpSerieSave(s) { try { localStorage.setItem(VCP_LS, JSON.stringify(s))
 
 async function loadCafciKPIs() {
   try {
-    const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf  = await res.arrayBuffer();
-    const rows = XLSX.utils.sheet_to_json(
-      XLSX.read(buf, { type:'array' }).Sheets[XLSX.read(buf,{type:'array'}).SheetNames[0]],
-      { header: 1 }
-    );
-    const r = rows.find(x => typeof x[0]==='string'
-      && x[0].toLowerCase().includes('toronto trust renta fija plus')
-      && x[0].toLowerCase().includes('clase d'));
-    if (!r) throw new Error('Clase D no encontrada');
+    let vcpHoy, diaRend, ytd, m12, fecha, fuente;
 
-    // Columnas verificadas 04/05/26: 4=fecha dd/mm/yy, 5=VCP, 7=día%, 10=YTD%, 11=12M%
-    const vcpHoy  = r[5];
-    const diaRend = r[7];
-    const ytd     = r[10];
-    const m12     = r[11];
-    const fecha   = r[4] ?? '';
+    if (window.CAFCI_DATA && window.CAFCI_DATA.vcp > 0) {
+      // ── Datos locales (generados por update_cafci.ps1) ──
+      ({ vcp: vcpHoy, dia: diaRend, ytd, m12, fecha } = window.CAFCI_DATA);
+      fuente = `local · ${window.CAFCI_DATA.ts ?? ''}`;
+    } else {
+      // ── Fallback: fetch directo (puede fallar por CORS en file://) ──
+      const res = await fetch('https://api.pub.cafci.org.ar/pb_get', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf  = await res.arrayBuffer();
+      const rows = XLSX.utils.sheet_to_json(
+        XLSX.read(buf, { type:'array' }).Sheets[XLSX.read(buf,{type:'array'}).SheetNames[0]],
+        { header: 1 }
+      );
+      const r = rows.find(x => typeof x[0]==='string'
+        && x[0].toLowerCase().includes('toronto trust renta fija')
+        && x[0].toLowerCase().includes('clase b'));
+      if (!r) throw new Error('Clase B no encontrada');
+      vcpHoy  = r[5];
+      diaRend = r[7];
+      ytd     = r[10];
+      m12     = r[11];
+      fecha   = r[4] ?? '';
+      fuente  = 'live';
+    }
 
     // Parsear fecha a ISO (dd/mm/yy o dd/mm/yyyy)
     const fp = typeof fecha==='string' ? fecha.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/) : null;
@@ -1074,7 +1084,7 @@ async function loadCafciKPIs() {
     }
 
     const vcpFmt = vcpHoy.toLocaleString('es-AR', { minimumFractionDigits: 0 });
-    fillCard('kpi-d1',  'Último Día', diaRend, `VCP $${vcpFmt} · ${fecha}`);
+    fillCard('kpi-d1',  'Último Día', diaRend, `VCP $${vcpFmt} · ${fecha} · ${fuente}`);
     fillCard('kpi-d7',  '7 Días',     r7,  r7  !== null ? 'Cuotaparte D' : 'sin hist. aún');
     fillCard('kpi-d30', '30 Días',    r30, r30 !== null ? 'Cuotaparte D' : 'sin hist. aún');
     fillCard('kpi-d60', '60 Días',    r60, r60 !== null ? 'Cuotaparte D' : 'sin hist. aún');
