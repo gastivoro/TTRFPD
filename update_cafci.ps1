@@ -21,7 +21,7 @@ import openpyxl, json, sys, datetime
 tmp = sys.argv[1]
 wb  = openpyxl.load_workbook(tmp, read_only=True, data_only=True)
 ws  = wb.active
-T   = "toronto trust renta fija plus - clase b"
+T   = "toronto trust renta fija plus - clase d"
 
 # Columnas de variación: 7=día, 9=MTD, 10=YTD, 11=12M
 # Las fechas de referencia están en la sub-fila de encabezado (col 6=ayer, 9=MTD, 10=YTD, 11=12M)

@@ -1076,11 +1076,11 @@ async function loadCafciKPIs() {
 
     const vcpFmt = vcpHoy.toLocaleString('es-AR', { minimumFractionDigits: 0 });
     const badge = document.getElementById('cafci-badge');
-    if (badge) badge.textContent = `Clase B · ${fecha} · ${fuente}`;
+    if (badge) badge.textContent = `Clase D · ${fecha} · ${fuente}`;
     fillCard('kpi-dia', 'Día',  dia, `vs ${fecha_ayer || 'ayer'} · VCP $${vcpFmt}`);
-    fillCard('kpi-mtd', 'MTD',  mtd, `desde ${fecha_mtd || '—'} · Clase B`);
-    fillCard('kpi-ytd', 'YTD',  ytd, `desde ${fecha_ytd || '—'} · Clase B`);
-    fillCard('kpi-m12', '12M',  m12, `desde ${fecha_12m || '—'} · Clase B`);
+    fillCard('kpi-mtd', 'MTD',  mtd, `desde ${fecha_mtd || '—'} · Clase D`);
+    fillCard('kpi-ytd', 'YTD',  ytd, `desde ${fecha_ytd || '—'} · Clase D`);
+    fillCard('kpi-m12', '12M',  m12, `desde ${fecha_12m || '—'} · Clase D`);
     fillCard('kpi-d30', '30d',  r30, r30 !== null ? `Clase B · ${fecha}` : 'cargue historial VCP');
     fillCard('kpi-d90', '90d',  r90, r90 !== null ? `Clase B · ${fecha}` : 'cargue historial VCP');
 
