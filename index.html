@@ -349,7 +349,7 @@
   </div>
 
   <!-- KPIs -->
-  <div class="sec">Métricas Clave</div>
+  <div class="sec">Métricas Clave <span id="cafci-badge" style="font-size:9px;font-weight:400;letter-spacing:.05em;color:var(--muted);text-transform:none;margin-left:8px;"></span></div>
   <div class="cards cards-7" id="kpi-row"></div>
 
   <!-- Composición del Portafolio -->
@@ -1012,13 +1012,22 @@ async function loadCafciKPIs() {
   try {
     let vcpHoy, dia, mtd, ytd, m12, fecha, fecha_ayer, fecha_mtd, fecha_ytd, fecha_12m, fuente;
 
-    if (window.CAFCI_DATA && window.CAFCI_DATA.vcp > 0) {
-      ({ vcp: vcpHoy, dia, mtd, ytd, m12,
-         fecha, fecha_ayer, fecha_mtd, fecha_ytd, fecha_12m } = window.CAFCI_DATA);
-      fuente = `local · ${window.CAFCI_DATA.ts ?? ''}`;
-    } else {
-      throw new Error('Ejecutar actualizar_cafci.bat para obtener datos');
-    }
+    // Siempre intentar leer cafci_data.js fresco (evita datos cacheados en memoria)
+    let cd = window.CAFCI_DATA || null;
+    try {
+      const r = await fetch('cafci_data.js?_=' + Date.now());
+      if (r.ok) {
+        const txt = await r.text();
+        const m = txt.match(/window\.CAFCI_DATA\s*=\s*(\{[\s\S]+?\});/);
+        if (m) cd = JSON.parse(m[1]);
+      }
+    } catch(_) { /* file:// puede bloquear fetch — usar window.CAFCI_DATA */ }
+
+    if (!cd || !(cd.vcp > 0)) throw new Error('Ejecutar actualizar_cafci.bat para obtener datos');
+
+    ({ vcp: vcpHoy, dia, mtd, ytd, m12,
+       fecha, fecha_ayer, fecha_mtd, fecha_ytd, fecha_12m } = cd);
+    fuente = `${cd.ts ?? ''}`;
 
     // Parsear fecha a ISO (dd/mm/yy o dd/mm/yyyy)
     const fp = typeof fecha==='string' ? fecha.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/) : null;
@@ -1066,7 +1075,9 @@ async function loadCafciKPIs() {
     }
 
     const vcpFmt = vcpHoy.toLocaleString('es-AR', { minimumFractionDigits: 0 });
-    fillCard('kpi-dia', 'Día',  dia, `vs ${fecha_ayer || 'ayer'} · VCP $${vcpFmt} · ${fuente}`);
+    const badge = document.getElementById('cafci-badge');
+    if (badge) badge.textContent = `Clase B · ${fecha} · ${fuente}`;
+    fillCard('kpi-dia', 'Día',  dia, `vs ${fecha_ayer || 'ayer'} · VCP $${vcpFmt}`);
     fillCard('kpi-mtd', 'MTD',  mtd, `desde ${fecha_mtd || '—'} · Clase B`);
     fillCard('kpi-ytd', 'YTD',  ytd, `desde ${fecha_ytd || '—'} · Clase B`);
     fillCard('kpi-m12', '12M',  m12, `desde ${fecha_12m || '—'} · Clase B`);
